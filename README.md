@@ -75,6 +75,45 @@ adb -s 192.168.1.56:5555 shell settings --user 10 put secure \
   tts_default_synth com.reecedunn.espeak
 ```
 
+### Live userdebug install (development only)
+
+On an unlocked `userdebug` Pi, the image can be tested without reflashing by
+remounting the root filesystem and copying the platform-signed APKs into
+`/product/priv-app`. A plain `adb install` remains a data app and cannot test
+privileged/system-package behavior. The image build is still the reproducible
+release path, and this procedure is unavailable on a production `user` build.
+
+```sh
+adb -s 192.168.1.56:5555 root
+adb -s 192.168.1.56:5555 remount
+adb -s 192.168.1.56:5555 shell mkdir -p \
+  /product/priv-app/CaramelVoiceAssistant \
+  /product/priv-app/CaramelEspeakTts
+adb -s 192.168.1.56:5555 push \
+  out/target/product/rpi5/system/product/priv-app/CaramelVoiceAssistant/CaramelVoiceAssistant.apk \
+  /data/local/tmp/CaramelVoiceAssistant.apk
+adb -s 192.168.1.56:5555 push \
+  out/target/product/rpi5/system/product/priv-app/CaramelEspeakTts/CaramelEspeakTts.apk \
+  /data/local/tmp/CaramelEspeakTts.apk
+adb -s 192.168.1.56:5555 shell \
+  'cp /data/local/tmp/CaramelVoiceAssistant.apk /product/priv-app/CaramelVoiceAssistant/CaramelVoiceAssistant.apk && cp /data/local/tmp/CaramelEspeakTts.apk /product/priv-app/CaramelEspeakTts/CaramelEspeakTts.apk && chown 0:0 /product/priv-app/CaramelVoiceAssistant/CaramelVoiceAssistant.apk /product/priv-app/CaramelEspeakTts/CaramelEspeakTts.apk && chmod 0644 /product/priv-app/CaramelVoiceAssistant/CaramelVoiceAssistant.apk /product/priv-app/CaramelEspeakTts/CaramelEspeakTts.apk && restorecon -RF /product/priv-app/CaramelVoiceAssistant /product/priv-app/CaramelEspeakTts'
+adb -s 192.168.1.56:5555 reboot
+```
+
+After reboot, verify `pm list packages -s` and `dumpsys package` report both
+packages as `SYSTEM`, `PRIVILEGED`, and `PRODUCT`. If the Pi was previously
+sideloaded, Package Manager may also show `UPDATED_SYSTEM_APP` and a data APK
+path; a fresh product image removes that development-state residue. An
+existing user profile may need its assistant setting rebound once:
+
+```sh
+adb -s 192.168.1.56:5555 shell settings --user 10 put secure \
+  voice_interaction_service com.radiosound.caramelvoice/.CaramelVoiceInteractionService
+adb -s 192.168.1.56:5555 shell settings --user 10 put secure \
+  assistant com.radiosound.caramelvoice/.CaramelVoiceInteractionService
+adb -s 192.168.1.56:5555 shell cmd voiceinteraction disable false
+```
+
 ## Device smoke test
 
 ```sh
