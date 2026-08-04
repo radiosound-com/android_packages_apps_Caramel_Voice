@@ -1,8 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <voice-interaction-service xmlns:android="http://schemas.android.com/apk/res/android"
-    android:sessionService=".CaramelVoiceSessionService"
-    android:recognitionService=".VoskRecognitionService"
-    android:settingsActivity=".SettingsActivity"
+    android:sessionService="com.radiosound.caramelvoice.CaramelVoiceSessionService"
+    android:recognitionService="com.radiosound.caramelvoice.VoskRecognitionService"
+    android:settingsActivity="com.radiosound.caramelvoice.SettingsActivity"
     android:supportsAssist="true"
     android:supportsLaunchVoiceAssistFromKeyguard="true"
     android:supportsLocalInteraction="true" />
