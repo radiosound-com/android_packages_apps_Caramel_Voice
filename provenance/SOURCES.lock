@@ -1,0 +1,57 @@
+# Caramel Vanilla offline voice stack provenance
+# SHA-256 values were recorded on 2026-08-04.
+
+## Caramel source
+
+* Repository: https://github.com/radiosound-com/android_packages_apps_Caramel_Voice
+* License: Apache-2.0 (see ../LICENSE)
+* Build: `ANDROID_HOME=/path/to/sdk ./gradlew assembleRelease`
+
+## Vosk Android runtime
+
+* Artifact: `com.alphacephei:vosk-android:0.3.75`
+* Download: https://repo1.maven.org/maven2/com/alphacephei/vosk-android/0.3.75/vosk-android-0.3.75.aar
+* Source snapshot: `provenance/sources/vosk-android-0.3.75-sources.jar`
+* Source artifact: https://repo1.maven.org/maven2/com/alphacephei/vosk-android/0.3.75/vosk-android-0.3.75-sources.jar
+* Upstream source: https://github.com/alphacep/vosk-api/tree/master/android
+* License: Apache-2.0; notice in `../LICENSES/Vosk-Apache-2.0.txt`
+* AAR SHA-256: `ab2f8b91ac8051561aa325546b35fed9a68b36b8121bac5c6fb927525c4adfad`
+* Sources SHA-256: `e4c65b8b5bc6eda351c5fb29cfa4249f29bc9e8b5e346d168185815f59954446`
+
+## Vosk model
+
+* Artifact: `vosk-model-small-en-us-0.15.zip`
+* Download: https://alphacephei.com/vosk/models/vosk-model-small-en-us-0.15.zip
+* License: Apache-2.0, per the Vosk model catalog; model README copyright is
+  Alpha Cephei Inc. The README is retained inside the archive.
+* SHA-256: `30f26242c4eb449f948e42cb302dd7a686cb29a3423a8367f99ff41780942498`
+
+## JNA runtime
+
+* Artifact: `net.java.dev.jna:jna:5.18.1@aar`
+* Download: https://repo1.maven.org/maven2/net/java/dev/jna/jna/5.18.1/jna-5.18.1.aar
+* Source snapshot: `provenance/sources/jna-5.18.1-sources.jar`
+* Upstream source: https://github.com/java-native-access/jna/tree/5.18.1
+* License: Apache-2.0 OR LGPL-2.1-or-later. This build uses the Apache option;
+  notices are in `../LICENSES/`.
+* AAR SHA-256: `7f053e3ec99e14dd71259c82c1c8a02738d64a13c31226b2acc170f3060951e0`
+* Sources SHA-256: `0b9224e215b3c6a464959e3f994ddd64c14d46fb4014facd6afa1cc18e469466`
+
+## eSpeak NG Android TTS
+
+* Upstream: https://github.com/espeak-ng/espeak-ng/tree/1.52.0/android
+* Source commit: `4870adfa25b1a32b4361592f1be8a40337c58d6c`
+* Source archive: `provenance/sources/espeak-ng-1.52.0-4870adfa25b1a32b4361592f1be8a40337c58d6c.tar.gz`
+* License: GPL-3.0-only for eSpeak NG, with Apache-2.0 and BSD-2-Clause
+  components; notices are in `../LICENSES/` and the source archive.
+* Rebuild: `cd android && ./gradlew assembleRelease` with NDK
+  `26.1.10909125`, CMake `3.22.1`, and compile SDK 34.
+* APK SHA-256: `2d47f33cbf4010894655cbda4572b3c00e631b121789b4d67c8f874cf6773644`
+* Source archive SHA-256: `f93ebf3d8ff2a0d5bdf8833af9b5bb65c59e4b6f3ad6ff6ea26194447e187c02`
+
+## Built prebuilts
+
+* `app/prebuilts/CaramelVoiceAssistant-0.1.0.apk`
+  SHA-256: `fbc82217969737d2e5aca66013e91f276d54d3bacd65afd225da744705a9044a`
+* `app/prebuilts/CaramelEspeakTts-1.52.0.apk`
+  SHA-256: `2d47f33cbf4010894655cbda4572b3c00e631b121789b4d67c8f874cf6773644`

@@ -1,0 +1,4 @@
+app/model/*.zip filter=lfs diff=lfs merge=lfs -text
+app/libs/*.aar filter=lfs diff=lfs merge=lfs -text
+app/prebuilts/*.apk filter=lfs diff=lfs merge=lfs -text
+provenance/sources/*.tar.gz filter=lfs diff=lfs merge=lfs -text

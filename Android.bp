@@ -1,0 +1,50 @@
+// Copyright 2026 Radio Sound, Inc.
+// Licensed under the Apache License, Version 2.0.
+
+package {
+    default_applicable_licenses: ["caramel_voice_assistant_license"],
+}
+
+license {
+    name: "caramel_voice_assistant_license",
+    visibility: [":__subpackages__"],
+    license_kinds: [
+        "SPDX-license-identifier-Apache-2.0",
+    ],
+    license_text: [
+        "LICENSE",
+    ],
+}
+
+license {
+    name: "caramel_voice_espeak_license",
+    visibility: [":__subpackages__"],
+    license_kinds: [
+        "SPDX-license-identifier-GPL-3.0-only",
+        "SPDX-license-identifier-Apache-2.0",
+        "SPDX-license-identifier-BSD-2-Clause",
+    ],
+    license_text: [
+        "LICENSES/GPL-3.0-only.txt",
+        "LICENSES/Apache-2.0.txt",
+        "LICENSES/BSD-2-Clause.txt",
+    ],
+}
+
+android_app_import {
+    name: "CaramelVoiceAssistant",
+    apk: "app/prebuilts/CaramelVoiceAssistant-0.1.0.apk",
+    certificate: "platform",
+    privileged: true,
+    product_specific: true,
+    licenses: ["caramel_voice_assistant_license"],
+}
+
+android_app_import {
+    name: "CaramelEspeakTts",
+    apk: "app/prebuilts/CaramelEspeakTts-1.52.0.apk",
+    certificate: "platform",
+    privileged: true,
+    product_specific: true,
+    licenses: ["caramel_voice_espeak_license"],
+}
