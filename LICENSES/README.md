@@ -6,6 +6,7 @@ provenance record.
 
 * `GPL-3.0-only.txt`: GNU GPL v3, applicable to the eSpeak NG program.
 * `Apache-2.0.txt` and `BSD-2-Clause.txt`: notices used by eSpeak NG portions.
+* `Unicode-DFS-2015.txt`: Unicode UCD data notice included by eSpeak NG.
 * `Vosk-Apache-2.0.txt`: Vosk API/model notice.
 * `JNA-LGPL-2.1-or-later.txt`, `LGPL-2.1.txt`, and `JNA-Apache-2.0.txt`: JNA's
   dual-license notice and texts. This build elects the Apache-2.0 option for

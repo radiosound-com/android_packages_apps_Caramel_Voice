@@ -45,7 +45,9 @@
 * Caramel patch: `provenance/patches/espeak-ng-headless-data.patch`
 * Caramel patch SHA-256: `9c0013e6b9f429d6b34e6bff72cf0c7163e8d64470f08e57752e3c177d47df9d`
 * License: GPL-3.0-only for eSpeak NG, with Apache-2.0 and BSD-2-Clause
-  components; notices are in `../LICENSES/` and the source archive.
+  components plus Unicode UCD data; notices are in `../LICENSES/` and the
+  source archive. The extracted `COPYING.UCD` notice SHA-256 is
+  `be029c50df83105a810e391778b6edcb522d6cb4b4e142332aca54437a499bf7`.
 * Rebuild: `cd android && ./gradlew assembleRelease` with NDK
   `26.1.10909125`, CMake `3.22.1`, and compile SDK 34.
 * Patched APK SHA-256: `81e9e3c4761536f424bd37fcd86bef9ee71c3eb5cf0349509b51a395b1b83ebe`

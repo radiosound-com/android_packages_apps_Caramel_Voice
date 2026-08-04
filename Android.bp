@@ -23,11 +23,13 @@ license {
         "SPDX-license-identifier-GPL-3.0-only",
         "SPDX-license-identifier-Apache-2.0",
         "SPDX-license-identifier-BSD-2-Clause",
+        "SPDX-license-identifier-Unicode-DFS-2015",
     ],
     license_text: [
         "LICENSES/GPL-3.0-only.txt",
         "LICENSES/Apache-2.0.txt",
         "LICENSES/BSD-2-Clause.txt",
+        "LICENSES/Unicode-DFS-2015.txt",
     ],
 }
 
