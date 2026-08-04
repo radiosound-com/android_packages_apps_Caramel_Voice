@@ -6,6 +6,7 @@ import android.content.Intent;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
+import android.net.Uri;
 import android.speech.RecognitionListener;
 import android.speech.RecognizerIntent;
 import android.speech.SpeechRecognizer;
@@ -24,6 +25,12 @@ import java.util.Locale;
 
 public final class CaramelVoiceSession extends VoiceInteractionSession {
     private static final String TAG = "CaramelVoice";
+    private static final String ESPEAK_ENGINE = "com.reecedunn.espeak";
+    private static final String[] OSMAND_PACKAGES = {
+            "net.osmand.dev",
+            "net.osmand.plus",
+            "net.osmand"
+    };
 
     private final Context context;
     private final Handler mainHandler = new Handler(Looper.getMainLooper());
@@ -40,6 +47,9 @@ public final class CaramelVoiceSession extends VoiceInteractionSession {
     @Override
     public void onCreate() {
         super.onCreate();
+        // The product includes this engine as a system package. Naming it here
+        // also keeps the assistant's own response path working in a sideloaded
+        // smoke test where AOSP cannot yet select a non-system TTS package.
         tts = new TextToSpeech(context, status -> {
             ttsReady = status == TextToSpeech.SUCCESS;
             if (ttsReady) {
@@ -52,7 +62,7 @@ public final class CaramelVoiceSession extends VoiceInteractionSession {
             } else {
                 Log.w(TAG, "No TTS engine initialized; install an offline engine");
             }
-        });
+        }, ESPEAK_ENGINE);
     }
 
     @Override
@@ -153,16 +163,24 @@ public final class CaramelVoiceSession extends VoiceInteractionSession {
         if (normalized.contains("what time") || normalized.equals("time")) {
             response = "It is " + DateFormat.getTimeInstance(DateFormat.SHORT).format(new Date());
         } else if (normalized.contains("navigate home") || normalized.contains("take me home")) {
-            response = "Navigation home is recognized; the OsmAnd action is next to wire in.";
+            response = launchOsmAndSearch("home")
+                    ? "Opening home in OsmAnd."
+                    : "OsmAnd is not installed.";
             Log.i(TAG, "NAVIGATE_HOME: " + phrase);
+        } else if (normalized.startsWith("navigate to ")
+                || normalized.startsWith("take me to ")) {
+            String destination = normalized.startsWith("navigate to ")
+                    ? normalized.substring("navigate to ".length()).trim()
+                    : normalized.substring("take me to ".length()).trim();
+            boolean launched = !destination.isEmpty() && launchOsmAndSearch(destination);
+            response = launched
+                    ? "Opening navigation for " + destination + "."
+                    : "OsmAnd is not installed.";
+            Log.i(TAG, "NAVIGATE_TO: " + destination);
         } else if (normalized.startsWith("open map") || normalized.equals("show map")) {
-            response = "Opening the map.";
-            try {
-                Intent launch = context.getPackageManager().getLaunchIntentForPackage("net.osmand.dev");
-                if (launch != null) startAssistantActivity(launch);
-            } catch (RuntimeException exception) {
-                Log.w(TAG, "Unable to launch OsmAnd", exception);
-            }
+            response = launchOsmAnd(null)
+                    ? "Opening the map."
+                    : "OsmAnd is not installed.";
         } else if (normalized.startsWith("play ")) {
             response = "Media command recognized; media routing is next to wire in.";
             Log.i(TAG, "MEDIA_COMMAND: " + phrase);
@@ -173,6 +191,30 @@ public final class CaramelVoiceSession extends VoiceInteractionSession {
         updateStatus(response);
         speak(response);
         mainHandler.postDelayed(this::finish, 1200);
+    }
+
+    private boolean launchOsmAndSearch(String destination) {
+        return launchOsmAnd(Uri.parse("geo:0,0?q=" + Uri.encode(destination)));
+    }
+
+    private boolean launchOsmAnd(Uri uri) {
+        for (String packageName : OSMAND_PACKAGES) {
+            try {
+                Intent launch;
+                if (uri == null) {
+                    launch = context.getPackageManager().getLaunchIntentForPackage(packageName);
+                } else {
+                    launch = new Intent(Intent.ACTION_VIEW, uri).setPackage(packageName);
+                }
+                if (launch != null) {
+                    startAssistantActivity(launch);
+                    return true;
+                }
+            } catch (RuntimeException exception) {
+                Log.w(TAG, "Unable to launch OsmAnd package " + packageName, exception);
+            }
+        }
+        return false;
     }
 
     private void speak(String text) {

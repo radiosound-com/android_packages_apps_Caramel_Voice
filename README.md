@@ -13,9 +13,12 @@ Vanilla on AOSP 16 / AAOS:
   downloaded model archive itself is retained unchanged under `app/model/`.
   Runtime recognition and speech synthesis do not require a network connection.
 
-The command layer currently handles time, opening OsmAnd, map/navigation
-phrases, and media placeholders. It is intentionally deterministic and does
-not claim to be a general-purpose LLM assistant yet.
+The command layer currently handles time, opening OsmAnd, Android `geo:` map
+search/navigation phrases, and media placeholders. It checks the common
+OsmAnd package names (`net.osmand.dev`, `net.osmand.plus`, and `net.osmand`)
+so the product can use either the development or release build. It is
+intentionally deterministic and does not claim to be a general-purpose LLM
+assistant yet.
 
 ## Build the assistant APK
 
