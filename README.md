@@ -62,6 +62,16 @@ under `/product/priv-app`. The final image also needs the corresponding
 privapp permission allowlist entries for the permissions granted by the target
 AAOS release.
 
+Because the eSpeak package is a system package in the product image, AOSP's
+`TtsEngines` fallback can select it when `tts_default_synth` is empty. A
+sideloaded APK is not a system engine, so a sideload-only test must explicitly
+select it for the test user:
+
+```sh
+adb -s 192.168.1.56:5555 shell settings --user 10 put secure \
+  tts_default_synth com.reecedunn.espeak
+```
+
 ## Device smoke test
 
 ```sh
@@ -73,7 +83,51 @@ adb -s 192.168.1.56:5555 shell cmd role get-role-holders \
 adb -s 192.168.1.56:5555 logcat -d -s CaramelVoice Vosk TextToSpeech
 ```
 
-Set eSpeak as the default engine in the target user's TTS settings before
-testing OsmAnd. A successful test must show the eSpeak service in
-`dumpsys texttospeech`, the Vosk recognizer in the service query, an active
-assistant role holder, and spoken output from an OsmAnd navigation prompt.
+The AAOS push-to-talk path is CarInputService, not the generic Android input
+dispatcher. Inject the `KEYCODE_VOICE_ASSIST` press and release this way:
+
+```sh
+adb -s 192.168.1.56:5555 shell cmd car_service inject-key -a down 231
+adb -s 192.168.1.56:5555 shell cmd car_service inject-key -a up 231
+```
+
+For a product image, leave `tts_default_synth` unset to test the system-engine
+fallback. For a sideload-only test, run the explicit setting command above.
+A successful runtime test must show the eSpeak service in `dumpsys
+texttospeech`, the Vosk recognizer in the service query, an active assistant
+role holder, and a voice session after the AAOS PTT injection. Spoken output
+also requires a real ALSA capture/playback device; `AudioRecord`/`AudioTrack`
+return `ENODEV` on a Pi with no sound card even though the service wiring is
+working.
+
+## Reproducible host recognition check
+
+This checks the pinned model and the deterministic command phrase without
+requiring an audio device on the Pi. On macOS, create 16-bit mono 16 kHz WAV
+speech, then run the same Vosk model with the pinned Python package:
+
+```sh
+tmpdir=$(mktemp -d)
+python3 -m venv "$tmpdir/venv"
+"$tmpdir/venv/bin/pip" install --disable-pip-version-check 'vosk==0.3.44'
+say -v Samantha -o "$tmpdir/input.aiff" 'what time is it'
+afconvert -f WAVE -d LEI16@16000 -c 1 "$tmpdir/input.aiff" "$tmpdir/input.wav"
+unzip -q app/model/vosk-model-small-en-us-0.15.zip -d "$tmpdir/model"
+"$tmpdir/venv/bin/python" - "$tmpdir/model/vosk-model-small-en-us-0.15" "$tmpdir/input.wav" <<'PY'
+import json
+import sys
+import wave
+from vosk import KaldiRecognizer, Model
+
+model = Model(sys.argv[1])
+with wave.open(sys.argv[2], "rb") as audio:
+    recognizer = KaldiRecognizer(model, audio.getframerate())
+    while data := audio.readframes(4000):
+        recognizer.AcceptWaveform(data)
+    print(json.loads(recognizer.FinalResult()))
+PY
+```
+
+The expected result contains `what time is it`. This host check is test-only;
+the Android build uses the checked-in Vosk AAR and model archive described in
+`provenance/SOURCES.lock`.
