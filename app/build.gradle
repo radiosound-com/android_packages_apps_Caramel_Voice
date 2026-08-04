@@ -42,6 +42,11 @@ android {
 
 tasks.register("unpackVoskModel", Sync) {
     from(zipTree(file("model/vosk-model-small-en-us-0.15.zip")))
+    // StorageService uses this marker to detect a completed model copy. The
+    // upstream mobile archive predates that Android helper and omits it.
+    from("model/vosk-model-small-en-us-0.15/uuid") {
+        into("vosk-model-small-en-us-0.15")
+    }
     into(generatedAssets)
 }
 

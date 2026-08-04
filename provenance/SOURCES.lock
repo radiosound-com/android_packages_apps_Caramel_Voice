@@ -42,16 +42,18 @@
 * Upstream: https://github.com/espeak-ng/espeak-ng/tree/1.52.0/android
 * Source commit: `4870adfa25b1a32b4361592f1be8a40337c58d6c`
 * Source archive: `provenance/sources/espeak-ng-1.52.0-4870adfa25b1a32b4361592f1be8a40337c58d6c.tar.gz`
+* Caramel patch: `provenance/patches/espeak-ng-headless-data.patch`
+* Caramel patch SHA-256: `9c0013e6b9f429d6b34e6bff72cf0c7163e8d64470f08e57752e3c177d47df9d`
 * License: GPL-3.0-only for eSpeak NG, with Apache-2.0 and BSD-2-Clause
   components; notices are in `../LICENSES/` and the source archive.
 * Rebuild: `cd android && ./gradlew assembleRelease` with NDK
   `26.1.10909125`, CMake `3.22.1`, and compile SDK 34.
-* APK SHA-256: `2d47f33cbf4010894655cbda4572b3c00e631b121789b4d67c8f874cf6773644`
+* Patched APK SHA-256: `81e9e3c4761536f424bd37fcd86bef9ee71c3eb5cf0349509b51a395b1b83ebe`
 * Source archive SHA-256: `f93ebf3d8ff2a0d5bdf8833af9b5bb65c59e4b6f3ad6ff6ea26194447e187c02`
 
 ## Built prebuilts
 
 * `app/prebuilts/CaramelVoiceAssistant-0.1.0.apk`
-  SHA-256: `e7fa8f5bf697f3874b418eebd5220e0d4c2930281794f2e4826a291506c989a8`
+  SHA-256: `da0891333b2f1a03ad399e74004de56eb9144a761dc209801646aa8663f65bbd`
 * `app/prebuilts/CaramelEspeakTts-1.52.0.apk`
-  SHA-256: `2d47f33cbf4010894655cbda4572b3c00e631b121789b4d67c8f874cf6773644`
+  SHA-256: `81e9e3c4761536f424bd37fcd86bef9ee71c3eb5cf0349509b51a395b1b83ebe`

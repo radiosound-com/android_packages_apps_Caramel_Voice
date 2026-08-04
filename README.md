@@ -8,8 +8,10 @@ Vanilla on AOSP 16 / AAOS:
   layer.
 * `CaramelEspeakTts` is the upstream eSpeak Android TTS APK, built from the
   pinned GPL source snapshot in `provenance/sources/`.
-* The Vosk US-English mobile model is embedded in the assistant APK. Runtime
-  recognition and speech synthesis do not require a network connection.
+* The Vosk US-English mobile model is embedded in the assistant APK. The build
+  adds the small `uuid` marker expected by Vosk Android's `StorageService`; the
+  downloaded model archive itself is retained unchanged under `app/model/`.
+  Runtime recognition and speech synthesis do not require a network connection.
 
 The command layer currently handles time, opening OsmAnd, map/navigation
 phrases, and media placeholders. It is intentionally deterministic and does
@@ -29,14 +31,18 @@ in `provenance/SOURCES.lock`.
 
 ```sh
 tar -xzf provenance/sources/espeak-ng-1.52.0-*.tar.gz
-cd espeak-ng-1.52.0/android
+cd espeak-ng-1.52.0
+git apply /path/to/android_packages_apps_Caramel_Voice/provenance/patches/espeak-ng-headless-data.patch
+cd android
 $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager \
   "cmake;3.22.1" "ndk;26.1.10909125"
 ./gradlew assembleRelease
 ```
 
 The eSpeak source archive is the preferred corresponding source for the
-prebuilt TTS APK. It contains the upstream `COPYING`, `COPYING.APACHE`, and
+prebuilt TTS APK. The Caramel patch makes first-use data extraction headless,
+so a product-installed engine does not need to launch its data-download
+Activity. It contains the upstream `COPYING`, `COPYING.APACHE`, and
 `COPYING.BSD2` notices.
 
 ## AOSP integration
@@ -63,7 +69,7 @@ adb -s 192.168.1.56:5555 shell dumpsys texttospeech
 adb -s 192.168.1.56:5555 shell cmd package query-services \
   --brief -a android.speech.RecognitionService
 adb -s 192.168.1.56:5555 shell cmd role get-role-holders \
-  android.app.role.ASSISTANT --user 0
+  android.app.role.ASSISTANT --user 10
 adb -s 192.168.1.56:5555 logcat -d -s CaramelVoice Vosk TextToSpeech
 ```
 
