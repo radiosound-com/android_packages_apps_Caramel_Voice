@@ -71,24 +71,32 @@ public final class VoskRecognitionService extends RecognitionService {
                 Recognizer recognizer = new Recognizer(loadedModel, 16000.0f);
                 SpeechService service = new SpeechService(recognizer, 16000.0f);
                 speechService = service;
+                final String[] latestText = {""};
                 scheduleListeningTimeout(service, listener);
                 service.startListening(new RecognitionListener() {
                     @Override public void onPartialResult(String hypothesis) {
                         String text = textFromJson(hypothesis);
-                        sendPartial(listener, text);
-                        if (!text.isEmpty()) scheduleSilenceFinalization(service);
+                        if (!text.isEmpty()) {
+                            latestText[0] = text;
+                            sendPartial(listener, text);
+                            scheduleSilenceFinalization(service);
+                        }
                     }
 
                     @Override public void onResult(String hypothesis) {
                         String text = textFromJson(hypothesis);
-                        sendPartial(listener, text);
-                        if (!text.isEmpty()) scheduleSilenceFinalization(service);
+                        if (!text.isEmpty()) {
+                            latestText[0] = text;
+                            sendPartial(listener, text);
+                            scheduleSilenceFinalization(service);
+                        }
                     }
 
                     @Override public void onFinalResult(String hypothesis) {
                         cancelRecognitionTimers();
                         speechService = null;
                         String text = textFromJson(hypothesis);
+                        if (text.isEmpty()) text = latestText[0];
                         Log.i(TAG, "Vosk final: " + text);
                         try {
                             listener.endOfSpeech();
