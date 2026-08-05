@@ -212,57 +212,42 @@ public final class CaramelVoiceSession extends VoiceInteractionSession {
     }
 
     private void handleCommand(String phrase) {
-        String normalized = phrase == null ? "" : phrase.toLowerCase(Locale.US).trim();
-        if (normalized.isEmpty()) {
+        VoiceCommandRouter.Command command = VoiceCommandRouter.route(phrase);
+        if (command.type == VoiceCommandRouter.Type.EMPTY) {
             speak("I did not hear a command");
             finish();
             return;
         }
 
         String response;
-        if (isTimeQuery(normalized)) {
+        if (command.type == VoiceCommandRouter.Type.TIME) {
             response = "It is " + DateFormat.getTimeInstance(DateFormat.SHORT).format(new Date());
-        } else if (normalized.contains("navigate home") || normalized.contains("take me home")) {
+        } else if (command.type == VoiceCommandRouter.Type.NAVIGATE_HOME) {
             response = launchOsmAndSearch("home")
                     ? "Opening home in OsmAnd."
                     : "OsmAnd is not installed.";
             Log.i(TAG, "NAVIGATE_HOME: " + phrase);
-        } else if (normalized.startsWith("navigate to ")
-                || normalized.startsWith("take me to ")) {
-            String destination = normalized.startsWith("navigate to ")
-                    ? normalized.substring("navigate to ".length()).trim()
-                    : normalized.substring("take me to ".length()).trim();
+        } else if (command.type == VoiceCommandRouter.Type.NAVIGATE_TO) {
+            String destination = command.argument;
             boolean launched = !destination.isEmpty() && launchOsmAndSearch(destination);
             response = launched
                     ? "Opening navigation for " + destination + "."
                     : "OsmAnd is not installed.";
             Log.i(TAG, "NAVIGATE_TO: " + destination);
-        } else if (normalized.startsWith("open map") || normalized.equals("show map")) {
+        } else if (command.type == VoiceCommandRouter.Type.OPEN_MAP) {
             response = launchOsmAnd(null)
                     ? "Opening the map."
                     : "OsmAnd is not installed.";
-        } else if (normalized.startsWith("play ")) {
+        } else if (command.type == VoiceCommandRouter.Type.PLAY) {
             response = "Media command recognized; media routing is next to wire in.";
             Log.i(TAG, "MEDIA_COMMAND: " + phrase);
         } else {
-            response = "I heard: " + phrase;
+            response = "I heard: " + command.phrase;
         }
 
         updateStatus(response);
         Log.i(TAG, "COMMAND: " + phrase + " -> " + response);
         speak(response);
-    }
-
-    /**
-     * Accept the ordinary wording and the short substitutions produced by the
-     * small Vosk model (for example, "my time is it" for "what time is it").
-     * Keep this deliberately narrow so unrelated commands are not reclassified.
-     */
-    private boolean isTimeQuery(String normalized) {
-        return normalized.contains("what time")
-                || normalized.equals("time")
-                || normalized.matches("(?:my|the) time(?: is it| now)?")
-                || normalized.endsWith(" time is it");
     }
 
     private boolean launchOsmAndSearch(String destination) {

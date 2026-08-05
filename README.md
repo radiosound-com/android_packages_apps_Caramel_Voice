@@ -24,11 +24,13 @@ assistant yet.
 
 ```sh
 export ANDROID_HOME=/path/to/android-sdk
-./gradlew assembleRelease
+./gradlew test assembleRelease
 ```
 
 The build expects API 36. The Vosk AAR and model archive are checked by SHA-256
-in `provenance/SOURCES.lock`.
+in `provenance/SOURCES.lock`. The host unit tests cover command normalization,
+time-query substitutions, navigation destination extraction, and safe fallback
+to an echo response.
 
 The `aconfig/` directory contains the small Apache-2.0 Caramel release value
 set used by the device product to disable the Pi USB-ALSA enumeration race.
