@@ -140,7 +140,16 @@ texttospeech`, the Vosk recognizer in the service query, an active assistant
 role holder, and a voice session after the AAOS PTT injection. Spoken output
 also requires a real ALSA capture/playback device; `AudioRecord`/`AudioTrack`
 return `ENODEV` on a Pi with no sound card even though the service wiring is
-working.
+working. The Caramel product grants `RECORD_AUDIO` to the preinstalled
+assistant on first boot; verify the effective grant before testing capture:
+
+```sh
+adb -s 192.168.1.56:5555 shell cmd package check-permission \
+  android.permission.RECORD_AUDIO com.radiosound.caramelvoice 10
+```
+
+The expected result is `granted`. This is a normal dangerous-permission grant,
+not a privileged-permission bypass, so a user or policy can revoke it.
 
 ## Reproducible host recognition check
 
