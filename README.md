@@ -48,6 +48,27 @@ so a product-installed engine does not need to launch its data-download
 Activity. It contains the upstream `COPYING`, `COPYING.APACHE`, and
 `COPYING.BSD2` notices.
 
+## Try other offline voices
+
+eSpeak NG includes many voice variants without downloading additional model
+files. Open Caramel Voice's settings page and choose **Configure offline
+voice**, then select a variant such as female, male 1--8, Klatt, NVDA, young,
+old, croak, or whisper. The same screen exposes rate, pitch, pitch range, and
+volume controls. For an ADB-only test, launch the engine settings directly:
+
+```sh
+adb -s 192.168.1.56:5555 shell am start \
+  -a android.speech.tts.engine.CONFIGURE_ENGINE \
+  -n com.reecedunn.espeak/.TtsSettingsActivity
+```
+
+These choices change the eSpeak rendering style, but they remain compact
+formant voices; they will not sound like a neural voice. A future Piper-based
+engine is the path to more natural speech, at the cost of a substantially
+larger per-voice model and model-specific license/provenance work. Piper can
+coexist with Vosk because it replaces only the TTS engine; each bundled Piper
+voice must be audited and recorded separately before shipping.
+
 ## AOSP integration
 
 Add this repository to the AOSP manifest at `vendor/radiosound/voiceassistant`,

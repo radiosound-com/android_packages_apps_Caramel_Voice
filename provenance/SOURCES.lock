@@ -1,5 +1,5 @@
 # Caramel Vanilla offline voice stack provenance
-# SHA-256 values were recorded on 2026-08-04.
+# SHA-256 values were recorded on 2026-08-05.
 
 ## Caramel source
 
@@ -56,6 +56,6 @@
 ## Built prebuilts
 
 * `app/prebuilts/CaramelVoiceAssistant-0.1.0.apk`
-  SHA-256: `4bb4040bc74be2eca9f87b8923919eed3aa0a5cf91350a0a56ffec19b22933b0`
+  SHA-256: `458232a446ef6dbc9eaf53d8780afb4371e590a403f469eb6e5ba98f61498f1f`
 * `app/prebuilts/CaramelEspeakTts-1.52.0.apk`
   SHA-256: `81e9e3c4761536f424bd37fcd86bef9ee71c3eb5cf0349509b51a395b1b83ebe`
