@@ -208,3 +208,9 @@ PY
 The expected result contains `what time is it`. This host check is test-only;
 the Android build uses the checked-in Vosk AAR and model archive described in
 `provenance/SOURCES.lock`.
+
+If Android reports `SpeechRecognizer.ERROR_CLIENT` while a USB microphone is
+still appearing, the PTT session retries microphone startup three times at
+750 ms intervals before reporting that the microphone is unavailable. This
+handles a transient audio-policy registration delay; it does not replace the
+product-level USB Aconfig workaround.

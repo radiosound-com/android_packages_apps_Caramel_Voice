@@ -31,6 +31,8 @@ public final class CaramelVoiceSession extends VoiceInteractionSession {
             "net.osmand.plus",
             "net.osmand"
     };
+    private static final int MAX_RECOGNITION_ROUTE_RETRIES = 3;
+    private static final long RECOGNITION_ROUTE_RETRY_DELAY_MS = 750;
 
     private final Context context;
     private final Handler mainHandler = new Handler(Looper.getMainLooper());
@@ -41,6 +43,9 @@ public final class CaramelVoiceSession extends VoiceInteractionSession {
     private int utteranceSequence;
     private String activeUtteranceId;
     private Runnable utteranceTimeout;
+    private Runnable recognitionRetry;
+    private int recognitionRouteRetries;
+    private boolean sessionVisible;
 
     CaramelVoiceSession(Context context) {
         super(context);
@@ -93,18 +98,24 @@ public final class CaramelVoiceSession extends VoiceInteractionSession {
     @Override
     public void onShow(Bundle args, int showFlags) {
         super.onShow(args, showFlags);
+        sessionVisible = true;
+        recognitionRouteRetries = 0;
         updateStatus("Listening…");
         startRecognition();
     }
 
     @Override
     public void onHide() {
+        sessionVisible = false;
+        cancelRecognitionRetry();
         stopRecognition();
         super.onHide();
     }
 
     @Override
     public void onDestroy() {
+        sessionVisible = false;
+        cancelRecognitionRetry();
         stopRecognition();
         if (tts != null) {
             tts.shutdown();
@@ -130,6 +141,10 @@ public final class CaramelVoiceSession extends VoiceInteractionSession {
             @Override public void onEndOfSpeech() { updateStatus("Processing…"); }
             @Override public void onError(int error) {
                 Log.w(TAG, "Recognition error: " + error);
+                if (error == SpeechRecognizer.ERROR_CLIENT
+                        && scheduleRecognitionRouteRetry()) {
+                    return;
+                }
                 updateStatus("Recognition error " + error);
                 speak("I could not understand that");
             }
@@ -160,6 +175,39 @@ public final class CaramelVoiceSession extends VoiceInteractionSession {
             recognizer.cancel();
             recognizer.destroy();
             recognizer = null;
+        }
+    }
+
+    private boolean scheduleRecognitionRouteRetry() {
+        if (recognitionRouteRetries >= MAX_RECOGNITION_ROUTE_RETRIES) {
+            Log.w(TAG, "Microphone route unavailable after "
+                    + MAX_RECOGNITION_ROUTE_RETRIES + " retries");
+            updateStatus("Microphone unavailable");
+            speak("The microphone is unavailable");
+            return false;
+        }
+
+        int attempt = ++recognitionRouteRetries;
+        Log.i(TAG, "Retrying microphone route, attempt " + attempt + "/"
+                + MAX_RECOGNITION_ROUTE_RETRIES);
+        updateStatus("Waiting for microphone…");
+        mainHandler.post(() -> {
+            if (!sessionVisible) return;
+            stopRecognition();
+            cancelRecognitionRetry();
+            recognitionRetry = () -> {
+                recognitionRetry = null;
+                if (sessionVisible) startRecognition();
+            };
+            mainHandler.postDelayed(recognitionRetry, RECOGNITION_ROUTE_RETRY_DELAY_MS);
+        });
+        return true;
+    }
+
+    private void cancelRecognitionRetry() {
+        if (recognitionRetry != null) {
+            mainHandler.removeCallbacks(recognitionRetry);
+            recognitionRetry = null;
         }
     }
 
