@@ -38,6 +38,9 @@ public final class CaramelVoiceSession extends VoiceInteractionSession {
     private SpeechRecognizer recognizer;
     private TextToSpeech tts;
     private boolean ttsReady;
+    private int utteranceSequence;
+    private String activeUtteranceId;
+    private Runnable utteranceTimeout;
 
     CaramelVoiceSession(Context context) {
         super(context);
@@ -55,9 +58,19 @@ public final class CaramelVoiceSession extends VoiceInteractionSession {
             if (ttsReady) {
                 tts.setLanguage(Locale.US);
                 tts.setOnUtteranceProgressListener(new UtteranceProgressListener() {
-                    @Override public void onStart(String utteranceId) { }
-                    @Override public void onDone(String utteranceId) { }
-                    @Override public void onError(String utteranceId) { }
+                    @Override public void onStart(String utteranceId) {
+                        Log.i(TAG, "TTS started: " + utteranceId);
+                    }
+
+                    @Override public void onDone(String utteranceId) {
+                        Log.i(TAG, "TTS completed: " + utteranceId);
+                        completeUtterance(utteranceId);
+                    }
+
+                    @Override public void onError(String utteranceId) {
+                        Log.w(TAG, "TTS failed: " + utteranceId);
+                        completeUtterance(utteranceId);
+                    }
                 });
             } else {
                 Log.w(TAG, "No TTS engine initialized; install an offline engine");
@@ -119,7 +132,6 @@ public final class CaramelVoiceSession extends VoiceInteractionSession {
                 Log.w(TAG, "Recognition error: " + error);
                 updateStatus("Recognition error " + error);
                 speak("I could not understand that");
-                finish();
             }
             @Override public void onResults(Bundle results) {
                 ArrayList<String> values = results.getStringArrayList(
@@ -189,8 +201,8 @@ public final class CaramelVoiceSession extends VoiceInteractionSession {
         }
 
         updateStatus(response);
+        Log.i(TAG, "COMMAND: " + phrase + " -> " + response);
         speak(response);
-        mainHandler.postDelayed(this::finish, 1200);
     }
 
     private boolean launchOsmAndSearch(String destination) {
@@ -218,13 +230,36 @@ public final class CaramelVoiceSession extends VoiceInteractionSession {
     }
 
     private void speak(String text) {
+        String utteranceId = "caramel-voice-" + (++utteranceSequence);
+        activeUtteranceId = utteranceId;
         if (ttsReady && tts != null) {
             Bundle params = new Bundle();
-            params.putString(TextToSpeech.Engine.KEY_PARAM_UTTERANCE_ID, "caramel-voice");
-            tts.speak(text, TextToSpeech.QUEUE_FLUSH, params, "caramel-voice");
+            params.putString(TextToSpeech.Engine.KEY_PARAM_UTTERANCE_ID, utteranceId);
+            int result = tts.speak(text, TextToSpeech.QUEUE_FLUSH, params, utteranceId);
+            if (result != TextToSpeech.SUCCESS) {
+                Log.w(TAG, "TTS rejected utterance " + utteranceId + ": " + result);
+                completeUtterance(utteranceId);
+                return;
+            }
+            Runnable timeout = () -> completeUtterance(utteranceId);
+            utteranceTimeout = timeout;
+            mainHandler.postDelayed(timeout, 8000);
         } else {
             Log.w(TAG, "TTS unavailable: " + text);
+            completeUtterance(utteranceId);
         }
+    }
+
+    private void completeUtterance(String utteranceId) {
+        mainHandler.post(() -> {
+            if (!utteranceId.equals(activeUtteranceId)) return;
+            activeUtteranceId = null;
+            if (utteranceTimeout != null) {
+                mainHandler.removeCallbacks(utteranceTimeout);
+                utteranceTimeout = null;
+            }
+            mainHandler.postDelayed(this::finish, 200);
+        });
     }
 
     private void updateStatus(String text) {
