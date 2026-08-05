@@ -126,11 +126,11 @@ adb -s 192.168.1.56:5555 logcat -d -s CaramelVoice Vosk TextToSpeech
 ```
 
 The AAOS push-to-talk path is CarInputService, not the generic Android input
-dispatcher. Inject the `KEYCODE_VOICE_ASSIST` press and release this way:
+dispatcher. Inject a short `KEYCODE_VOICE_ASSIST` press atomically; separate
+ADB down/up commands can take long enough to be interpreted as a long press:
 
 ```sh
-adb -s 192.168.1.56:5555 shell cmd car_service inject-key -a down 231
-adb -s 192.168.1.56:5555 shell cmd car_service inject-key -a up 231
+adb -s 192.168.1.56:5555 shell cmd car_service inject-key -t 200 231
 ```
 
 For a product image, leave `tts_default_synth` unset to test the system-engine
