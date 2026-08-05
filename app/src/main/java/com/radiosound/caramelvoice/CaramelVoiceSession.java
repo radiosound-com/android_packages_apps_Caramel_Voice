@@ -172,7 +172,7 @@ public final class CaramelVoiceSession extends VoiceInteractionSession {
         }
 
         String response;
-        if (normalized.contains("what time") || normalized.equals("time")) {
+        if (isTimeQuery(normalized)) {
             response = "It is " + DateFormat.getTimeInstance(DateFormat.SHORT).format(new Date());
         } else if (normalized.contains("navigate home") || normalized.contains("take me home")) {
             response = launchOsmAndSearch("home")
@@ -203,6 +203,18 @@ public final class CaramelVoiceSession extends VoiceInteractionSession {
         updateStatus(response);
         Log.i(TAG, "COMMAND: " + phrase + " -> " + response);
         speak(response);
+    }
+
+    /**
+     * Accept the ordinary wording and the short substitutions produced by the
+     * small Vosk model (for example, "my time is it" for "what time is it").
+     * Keep this deliberately narrow so unrelated commands are not reclassified.
+     */
+    private boolean isTimeQuery(String normalized) {
+        return normalized.contains("what time")
+                || normalized.equals("time")
+                || normalized.matches("(?:my|the) time(?: is it| now)?")
+                || normalized.endsWith(" time is it");
     }
 
     private boolean launchOsmAndSearch(String destination) {
