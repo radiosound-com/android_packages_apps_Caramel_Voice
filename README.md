@@ -30,6 +30,11 @@ export ANDROID_HOME=/path/to/android-sdk
 The build expects API 36. The Vosk AAR and model archive are checked by SHA-256
 in `provenance/SOURCES.lock`.
 
+The `aconfig/` directory contains the small Apache-2.0 Caramel release value
+set used by the device product to disable the Pi USB-ALSA enumeration race.
+It adds no third-party code or runtime dependency; the device release config
+opts it in only for `aosp_rpi5_car-caramel-*` builds.
+
 ## Rebuild eSpeak
 
 ```sh

@@ -1,0 +1,12 @@
+# Copyright (C) 2026 Radio Sound, Inc.
+# SPDX-License-Identifier: Apache-2.0
+
+# Android's USB host callback can race ALSA node creation on the Pi 5.  The
+# older card-number wait path handles the late node while retaining automatic
+# USB audio routing for Caramel products.
+flag_value {
+    package: "com.android.server.usb.flags"
+    name: "wait_for_alsa_scan_results_if_has_audio_interface"
+    state: DISABLED
+    permission: READ_WRITE
+}

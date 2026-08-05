@@ -1,0 +1,12 @@
+// Copyright (C) 2026 Radio Sound, Inc.
+// SPDX-License-Identifier: Apache-2.0
+
+// This value set is kept in the vendor root namespace because AOSP framework
+// Aconfig declarations are also in that namespace.  The device release config
+// opts into it only for Caramel products.
+aconfig_value_set {
+    name: "aconfig_value_set-vendor_radiosound_caramel_usb",
+    srcs: [
+        "com.android.server.usb.flags/Android.bp",
+    ],
+}

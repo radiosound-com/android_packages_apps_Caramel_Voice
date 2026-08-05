@@ -1,0 +1,10 @@
+// Copyright (C) 2026 Radio Sound, Inc.
+// SPDX-License-Identifier: Apache-2.0
+
+aconfig_values {
+    name: "aconfig-values-vendor_radiosound_caramel_usb-com.android.server.usb.flags-all",
+    package: "com.android.server.usb.flags",
+    srcs: [
+        "wait_for_alsa_scan_results_if_has_audio_interface_flag_values.textproto",
+    ],
+}
