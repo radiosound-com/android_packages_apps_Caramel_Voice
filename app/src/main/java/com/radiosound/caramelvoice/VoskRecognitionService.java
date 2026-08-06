@@ -35,6 +35,7 @@ public final class VoskRecognitionService extends RecognitionService {
     private final Handler mainHandler = new Handler(Looper.getMainLooper());
     private volatile Model model;
     private volatile SpeechService speechService;
+    private volatile Recognizer activeRecognizer;
     private volatile Runnable silenceFinalizer;
     private volatile Runnable listeningTimeout;
 
@@ -69,11 +70,12 @@ public final class VoskRecognitionService extends RecognitionService {
                 }
                 listener.readyForSpeech(new Bundle());
                 Recognizer recognizer = new Recognizer(loadedModel, 16000.0f);
+                activeRecognizer = recognizer;
                 SpeechService service = new SpeechService(recognizer, 16000.0f);
                 speechService = service;
                 final String[] latestText = {""};
                 scheduleListeningTimeout(service, listener);
-                service.startListening(new RecognitionListener() {
+                if (!service.startListening(new RecognitionListener() {
                     @Override public void onPartialResult(String hypothesis) {
                         String text = textFromJson(hypothesis);
                         if (!text.isEmpty()) {
@@ -94,7 +96,7 @@ public final class VoskRecognitionService extends RecognitionService {
 
                     @Override public void onFinalResult(String hypothesis) {
                         cancelRecognitionTimers();
-                        speechService = null;
+                        closeSpeechService(service, recognizer);
                         String text = textFromJson(hypothesis);
                         if (text.isEmpty()) text = latestText[0];
                         Log.i(TAG, "Vosk final: " + text);
@@ -108,17 +110,22 @@ public final class VoskRecognitionService extends RecognitionService {
 
                     @Override public void onError(Exception exception) {
                         cancelRecognitionTimers();
-                        speechService = null;
+                        closeSpeechService(service, recognizer);
                         Log.e(TAG, "Vosk audio error", exception);
                         reportError(listener, SpeechRecognizer.ERROR_AUDIO);
                     }
 
                     @Override public void onTimeout() {
                         cancelRecognitionTimers();
-                        speechService = null;
+                        closeSpeechService(service, recognizer);
                         reportError(listener, SpeechRecognizer.ERROR_SPEECH_TIMEOUT);
                     }
-                });
+                })) {
+                    closeSpeechService(service, recognizer);
+                    reportError(listener, SpeechRecognizer.ERROR_CLIENT);
+                    return;
+                }
+                Log.i(TAG, "Vosk recognizer started at 16000 Hz");
             } catch (Exception exception) {
                 Log.e(TAG, "Unable to start Vosk recognizer", exception);
                 reportError(listener, SpeechRecognizer.ERROR_CLIENT);
@@ -137,22 +144,14 @@ public final class VoskRecognitionService extends RecognitionService {
     protected void onCancel(Callback listener) {
         cancelRecognitionTimers();
         SpeechService service = speechService;
-        speechService = null;
-        if (service != null) {
-            service.cancel();
-            service.shutdown();
-        }
+        closeSpeechService(service);
     }
 
     @Override
     public void onDestroy() {
         cancelRecognitionTimers();
         SpeechService service = speechService;
-        speechService = null;
-        if (service != null) {
-            service.cancel();
-            service.shutdown();
-        }
+        closeSpeechService(service);
         Model loadedModel = model;
         model = null;
         if (loadedModel != null) loadedModel.close();
@@ -177,13 +176,40 @@ public final class VoskRecognitionService extends RecognitionService {
         Runnable timeout = () -> {
             if (speechService == service) {
                 Log.i(TAG, "Vosk listening timeout");
-                service.cancel();
-                speechService = null;
+                closeSpeechService(service);
                 reportError(listener, SpeechRecognizer.ERROR_SPEECH_TIMEOUT);
             }
         };
         listeningTimeout = timeout;
         mainHandler.postDelayed(timeout, LISTENING_TIMEOUT_MS);
+    }
+
+    /** Stop the recognizer thread and release its AudioRecord on every terminal path. */
+    private void closeSpeechService(SpeechService service) {
+        closeSpeechService(service, activeRecognizer);
+    }
+
+    private void closeSpeechService(SpeechService service, Recognizer recognizer) {
+        if (service == null) return;
+        if (speechService == service) speechService = null;
+        try {
+            service.cancel();
+        } catch (RuntimeException exception) {
+            Log.w(TAG, "Unable to cancel Vosk recognizer", exception);
+        }
+        try {
+            service.shutdown();
+        } catch (RuntimeException exception) {
+            Log.w(TAG, "Unable to release Vosk AudioRecord", exception);
+        }
+        if (activeRecognizer == recognizer) activeRecognizer = null;
+        if (recognizer != null) {
+            try {
+                recognizer.close();
+            } catch (RuntimeException exception) {
+                Log.w(TAG, "Unable to release Vosk recognizer", exception);
+            }
+        }
     }
 
     private void cancelRecognitionTimers() {
