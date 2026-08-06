@@ -26,6 +26,8 @@ import java.util.Locale;
 public final class CaramelVoiceSession extends VoiceInteractionSession {
     private static final String TAG = "CaramelVoice";
     private static final String ESPEAK_ENGINE = "com.reecedunn.espeak";
+    private static final String OSMAND_NAVIGATE_ACTION =
+            "androidx.car.app.action.NAVIGATE";
     private static final String[] OSMAND_PACKAGES = {
             "net.osmand.dev",
             "net.osmand.plus",
@@ -261,7 +263,11 @@ public final class CaramelVoiceSession extends VoiceInteractionSession {
                 if (uri == null) {
                     launch = context.getPackageManager().getLaunchIntentForPackage(packageName);
                 } else {
-                    launch = new Intent(Intent.ACTION_VIEW, uri).setPackage(packageName);
+                    // OsmAnd reserves its Car App entry point for this action. A generic
+                    // ACTION_VIEW geo intent resolves to the full-screen GeoIntentActivity.
+                    launch = new Intent(OSMAND_NAVIGATE_ACTION, uri)
+                            .addCategory(Intent.CATEGORY_DEFAULT)
+                            .setPackage(packageName);
                 }
                 if (launch != null) {
                     startAssistantActivity(launch);
