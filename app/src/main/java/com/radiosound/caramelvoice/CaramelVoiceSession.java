@@ -7,6 +7,7 @@ import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
 import android.net.Uri;
+import android.provider.Settings;
 import android.speech.RecognitionListener;
 import android.speech.RecognizerIntent;
 import android.speech.SpeechRecognizer;
@@ -56,7 +57,7 @@ public final class CaramelVoiceSession extends VoiceInteractionSession {
     @Override
     public void onCreate() {
         super.onCreate();
-        tts = new TextToSpeech(context, status -> {
+        TextToSpeech.OnInitListener listener = status -> {
             ttsReady = status == TextToSpeech.SUCCESS;
             if (ttsReady) {
                 Log.i(TAG, "TTS engine initialized: " + tts.getDefaultEngine());
@@ -79,7 +80,15 @@ public final class CaramelVoiceSession extends VoiceInteractionSession {
             } else {
                 Log.w(TAG, "No TTS engine initialized; install an offline engine");
             }
-        });
+        };
+        String selectedEngine = Settings.Secure.getString(
+                context.getContentResolver(), Settings.Secure.TTS_DEFAULT_SYNTH);
+        if (selectedEngine == null || selectedEngine.isEmpty()) {
+            tts = new TextToSpeech(context, listener);
+        } else {
+            Log.i(TAG, "Requesting TTS engine: " + selectedEngine);
+            tts = new TextToSpeech(context, listener, selectedEngine);
+        }
     }
 
     @Override
