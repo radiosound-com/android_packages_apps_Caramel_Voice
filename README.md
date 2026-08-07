@@ -101,10 +101,10 @@ adb -s 192.168.1.56:5555 shell am start \
 
 Kokoro exposes eleven named English speakers: af, af_bella, af_nicole,
 af_sarah, af_sky, am_adam, am_michael, bf_emma, bf_isabella, bm_george,
-and bm_lewis. The upstream configuration screen stores the corresponding
-speaker ID (0--10); the mapping is recorded in provenance/SOURCES.lock so
-users do not have to guess. The selected engine is the engine used by the
-assistant; it is no longer hard-coded to eSpeak.
+and bm_lewis. The Caramel configuration screen presents these as a voice
+dropdown and stores the upstream speaker_id value (0--10). The selected
+engine is the engine used by the assistant; it is no longer hard-coded to
+eSpeak.
 
 Kokoro is the natural-speech option for the 4 GB Pi. It uses substantially
 more resident memory than eSpeak, so eSpeak remains installed as a fallback.
@@ -115,8 +115,9 @@ provenance/SOURCES.lock.
 ## AOSP integration
 
 Add this repository to the AOSP manifest at `vendor/radiosound/voiceassistant`,
-then add `CaramelVoiceAssistant` and `CaramelEspeakTts` to the product package
-list (or inherit `caramel_voice.mk`). The device overlay must set:
+then add the packages through `caramel_voice.mk`. eSpeak is always included as
+the small fallback; Kokoro is included by products that set
+`CARAMEL_VOICE_TTS := kokoro`. The device overlay must set:
 
 ```xml
 <string name="config_defaultAssistant" translatable="false">com.radiosound.caramelvoice</string>

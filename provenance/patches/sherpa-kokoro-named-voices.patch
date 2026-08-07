@@ -1,0 +1,145 @@
+--- a/android/SherpaOnnxTtsEngine/app/src/main/java/com/k2fsa/sherpa/onnx/tts/engine/MainActivity.kt	2026-08-06 20:43:49
++++ b/android/SherpaOnnxTtsEngine/app/src/main/java/com/k2fsa/sherpa/onnx/tts/engine/MainActivity.kt	2026-08-06 20:56:50
+@@ -29,6 +29,8 @@
+ import androidx.compose.foundation.text.KeyboardOptions
+ import androidx.compose.foundation.verticalScroll
+ import androidx.compose.material3.Button
++import androidx.compose.material3.DropdownMenu
++import androidx.compose.material3.DropdownMenuItem
+ import androidx.compose.material3.ExperimentalMaterial3Api
+ import androidx.compose.material3.MaterialTheme
+ import androidx.compose.material3.OutlinedTextField
+@@ -59,6 +61,28 @@
+ 
+ const val TAG = "sherpa-onnx-tts-engine"
+ 
++private val KOKORO_SPEAKERS = listOf(
++    "af",
++    "af_bella",
++    "af_nicole",
++    "af_sarah",
++    "af_sky",
++    "am_adam",
++    "am_michael",
++    "bf_emma",
++    "bf_isabella",
++    "bm_george",
++    "bm_lewis",
++)
++
++private fun speakerDisplayName(speakerId: Int, numSpeakers: Int): String {
++    return if (numSpeakers == KOKORO_SPEAKERS.size && speakerId in KOKORO_SPEAKERS.indices) {
++        KOKORO_SPEAKERS[speakerId]
++    } else {
++        "Speaker ${speakerId + 1}"
++    }
++}
++
+ class MainActivity : ComponentActivity() {
+     // TODO(fangjun): Save settings in ttsViewModel
+     private val ttsViewModel: TtsViewModel by viewModels()
+@@ -147,30 +171,38 @@
+ 
+                                 val numSpeakers = TtsEngine.tts!!.numSpeakers()
+                                 if (numSpeakers > 1) {
+-                                    OutlinedTextField(
+-                                        value = TtsEngine.speakerIdState.value.toString(),
+-                                        onValueChange = {
+-                                            if (it.isEmpty() || it.isBlank()) {
+-                                                TtsEngine.speakerId = 0
+-                                            } else {
+-                                                try {
+-                                                    TtsEngine.speakerId = it.toString().toInt()
+-                                                } catch (ex: NumberFormatException) {
+-                                                    Log.i(TAG, "Invalid input: $it")
+-                                                    TtsEngine.speakerId = 0
+-                                                }
+-                                            }
+-                                            preferenceHelper.setSid(TtsEngine.speakerId)
+-                                        },
+-                                        label = {
+-                                            Text("Speaker ID: (0-${numSpeakers - 1})")
+-                                        },
+-                                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
++                                    var speakerMenuExpanded by remember { mutableStateOf(false) }
++                                    Box(
+                                         modifier = Modifier
+                                             .fillMaxWidth()
+                                             .padding(bottom = 16.dp)
+-                                            .wrapContentHeight(),
+-                                    )
++                                    ) {
++                                        Button(
++                                            onClick = { speakerMenuExpanded = true },
++                                            modifier = Modifier.fillMaxWidth(),
++                                        ) {
++                                            Text(
++                                                "Voice: ${speakerDisplayName(TtsEngine.speakerId, numSpeakers)}"
++                                            )
++                                        }
++                                        DropdownMenu(
++                                            expanded = speakerMenuExpanded,
++                                            onDismissRequest = { speakerMenuExpanded = false },
++                                        ) {
++                                            (0 until numSpeakers).forEach { speakerId ->
++                                                DropdownMenuItem(
++                                                    text = {
++                                                        Text(speakerDisplayName(speakerId, numSpeakers))
++                                                    },
++                                                    onClick = {
++                                                        TtsEngine.speakerId = speakerId
++                                                        preferenceHelper.setSid(speakerId)
++                                                        speakerMenuExpanded = false
++                                                    },
++                                                )
++                                            }
++                                        }
++                                    }
+                                 }
+ 
+                                 OutlinedTextField(
+--- a/android/SherpaOnnxTtsEngine/app/src/main/java/com/k2fsa/sherpa/onnx/tts/engine/TtsEngine.kt	2026-08-06 20:43:49
++++ b/android/SherpaOnnxTtsEngine/app/src/main/java/com/k2fsa/sherpa/onnx/tts/engine/TtsEngine.kt	2026-08-06 20:56:54
+@@ -74,7 +74,7 @@
+         // https://github.com/k2-fsa/sherpa-onnx/blob/master/scripts/apk/generate-tts-apk-script.py
+         //
+         // For VITS -- begin
+-        modelName = null
++        modelName = "model.onnx"
+         // For VITS -- end
+ 
+         // For Matcha -- begin
+@@ -83,15 +83,15 @@
+         // For Matcha -- end
+ 
+         // For Kokoro -- begin
+-        voices = null
++        voices = "voices.bin"
+         // For Kokoro -- end
+ 
+-        modelDir = null
++        modelDir = "kokoro-en-v0_19"
+         ruleFsts = null
+         ruleFars = null
+         lexicon = null
+-        dataDir = null
+-        lang = null
++        dataDir = "kokoro-en-v0_19/espeak-ng-data"
++        lang = "eng"
+         lang2 = null
+ 
+         // Please enable one and only one of the examples below
+@@ -253,10 +253,9 @@
+             voiceStyle = voiceStyle ?: "",
+         )
+ 
+-        speed = PreferenceHelper(context).getSpeed()
+-        speakerId = PreferenceHelper(context).getSid()
+-
+         tts = OfflineTts(assetManager = assets, config = config)
++        speed = PreferenceHelper(context).getSpeed()
++        speakerId = PreferenceHelper(context).getSid().coerceIn(0, tts!!.numSpeakers() - 1)
+     }
+ 
+ 
+
