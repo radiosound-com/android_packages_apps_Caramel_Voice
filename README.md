@@ -32,6 +32,31 @@ in `provenance/SOURCES.lock`. The host unit tests cover command normalization,
 time-query substitutions, navigation destination extraction, and safe fallback
 to an echo response.
 
+### Recognition model profiles
+
+The default `aosp_rpi5_car-caramel-userdebug` product uses the compact
+`vosk-model-small-en-us-0.15` archive embedded in the assistant APK. The
+`aosp_rpi5_car_lgraph-caramel-userdebug` product selects Vosk's
+`vosk-model-en-us-0.22-lgraph` model, which is a reasonable larger profile for
+a 4 GB Pi with measured headroom. The same lgraph profile is selected by
+`aosp_rpi5_car_16gb-caramel-userdebug`.
+
+The 125 MiB lgraph archive is copied only to the larger products at
+`/product/etc/caramel_voice/models/` and extracted lazily into the app's
+private no-backup directory. The model selector is therefore reproducible at
+build time and the compact image does not carry the larger archive:
+
+```sh
+lunch aosp_rpi5_car_lgraph-caramel-userdebug
+m RPI5_AUDIO=usb systemimage -j8
+```
+
+The lgraph model is Apache-2.0 per the Vosk catalog; its URL, hash, size, and
+product inclusion rule are recorded in `provenance/SOURCES.lock`. The larger
+profile currently changes recognition only; TTS remains the eSpeak-NG system
+engine until a neural TTS model and its per-voice license are audited and
+integrated.
+
 The `aconfig/` directory contains the small Apache-2.0 Caramel release value
 set used by the device product to disable the Pi USB-ALSA enumeration race.
 It adds no third-party code or runtime dependency; the device release config
