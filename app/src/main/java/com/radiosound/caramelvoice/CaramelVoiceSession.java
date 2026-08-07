@@ -38,6 +38,7 @@ public final class CaramelVoiceSession extends VoiceInteractionSession {
 
     private final Context context;
     private final Handler mainHandler = new Handler(Looper.getMainLooper());
+    private final MediaCommandController mediaController;
     private TextView statusView;
     private SpeechRecognizer recognizer;
     private TextToSpeech tts;
@@ -52,6 +53,7 @@ public final class CaramelVoiceSession extends VoiceInteractionSession {
     CaramelVoiceSession(Context context) {
         super(context);
         this.context = context;
+        mediaController = new MediaCommandController(context);
     }
 
     @Override
@@ -125,6 +127,7 @@ public final class CaramelVoiceSession extends VoiceInteractionSession {
         sessionVisible = false;
         cancelRecognitionRetry();
         stopRecognition();
+        mediaController.close();
         if (tts != null) {
             tts.shutdown();
             tts = null;
@@ -159,8 +162,7 @@ public final class CaramelVoiceSession extends VoiceInteractionSession {
             @Override public void onResults(Bundle results) {
                 ArrayList<String> values = results.getStringArrayList(
                         SpeechRecognizer.RESULTS_RECOGNITION);
-                String phrase = values == null || values.isEmpty() ? "" : values.get(0);
-                handleCommand(phrase);
+                handleCommand(values);
             }
             @Override public void onPartialResults(Bundle partialResults) {
                 ArrayList<String> values = partialResults.getStringArrayList(
@@ -219,8 +221,9 @@ public final class CaramelVoiceSession extends VoiceInteractionSession {
         }
     }
 
-    private void handleCommand(String phrase) {
-        VoiceCommandRouter.Command command = VoiceCommandRouter.route(phrase);
+    private void handleCommand(ArrayList<String> alternatives) {
+        VoiceCommandRouter.Command command = VoiceCommandRouter.routeBest(alternatives);
+        String phrase = command.phrase;
         if (command.type == VoiceCommandRouter.Type.EMPTY) {
             speak("I did not hear a command");
             finish();
@@ -247,8 +250,8 @@ public final class CaramelVoiceSession extends VoiceInteractionSession {
                     ? "Opening the map."
                     : "OsmAnd is not installed.";
         } else if (command.type == VoiceCommandRouter.Type.PLAY) {
-            response = "Media command recognized; media routing is next to wire in.";
-            Log.i(TAG, "MEDIA_COMMAND: " + phrase);
+            handleMediaCommand(command);
+            return;
         } else {
             response = "I heard: " + command.phrase;
         }
@@ -256,6 +259,35 @@ public final class CaramelVoiceSession extends VoiceInteractionSession {
         updateStatus(response);
         Log.i(TAG, "COMMAND: " + phrase + " -> " + response);
         speak(response);
+    }
+
+    private void handleMediaCommand(VoiceCommandRouter.Command command) {
+        String query = command.argument;
+        if (query.isEmpty()) {
+            updateStatus("Tell me what to play");
+            speak("Tell me what to play");
+            return;
+        }
+
+        updateStatus("Searching Spotify for " + query + "…");
+        Log.i(TAG, "MEDIA_COMMAND: " + command.phrase + " -> " + query);
+        mediaController.playFromSearch(query, (result, playerPackage) -> {
+            String response;
+            if (result == MediaCommandController.Result.STARTED) {
+                String player = "com.spotify.music".equals(playerPackage)
+                        ? "Spotify"
+                        : "your media app";
+                response = "Playing " + query + " on " + player + ".";
+            } else if (result == MediaCommandController.Result.PLAYER_NOT_FOUND) {
+                response = "Spotify is not installed.";
+            } else {
+                response = "I could not start that in Spotify.";
+            }
+            updateStatus(response);
+            Log.i(TAG, "MEDIA_RESULT: " + query + " -> " + result
+                    + " (" + playerPackage + ")");
+            speak(response);
+        });
     }
 
     private boolean launchOsmAndSearch(String destination) {

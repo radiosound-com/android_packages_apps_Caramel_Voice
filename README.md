@@ -16,7 +16,8 @@ Vanilla on AOSP 16 / AAOS:
   the Apache-2.0 Kokoro English model and eleven named speakers.
 
 The command layer currently handles time, opening OsmAnd, Android `geo:` map
-search/navigation phrases, and media placeholders. It checks the common
+search/navigation phrases, and `play …` searches through Spotify's standard
+Android media session. It checks the common
 OsmAnd package names (`net.osmand.dev`, `net.osmand.plus`, and `net.osmand`)
 so the product can use either the development or release build. It is
 intentionally deterministic and does not claim to be a general-purpose LLM
@@ -26,13 +27,14 @@ assistant yet.
 
 ```sh
 export ANDROID_HOME=/path/to/android-sdk
-./gradlew test assembleRelease
+./gradlew testReleaseUnitTest assembleRelease lintRelease
 ```
 
-The build expects API 36. The Vosk AAR and model archive are checked by SHA-256
+The product app has minimum and target API 36 because it is built specifically
+for Caramel Vanilla AOSP 16. The Vosk AAR and model archive are checked by SHA-256
 in `provenance/SOURCES.lock`. The host unit tests cover command normalization,
-time-query substitutions, navigation destination extraction, and safe fallback
-to an echo response.
+time-query substitutions, navigation and media-query extraction, N-best
+command selection, and safe fallback to an echo response.
 
 ### Recognition model profiles
 
@@ -50,7 +52,7 @@ build time and the compact image does not carry the larger archive:
 
 ```sh
 lunch aosp_rpi5_car_lgraph-caramel-userdebug
-m RPI5_AUDIO=usb systemimage -j8
+RPI5_AUDIO=usb m systemimage -j8
 ```
 
 The lgraph model is Apache-2.0 per the Vosk catalog; its URL, hash, size, and
@@ -58,6 +60,26 @@ product inclusion rule are recorded in `provenance/SOURCES.lock`. The larger
 profile currently changes recognition only; the
 aosp_rpi5_car_lgraph_kokoro and aosp_rpi5_car_16gb products also include
 the Kokoro neural TTS engine. The compact product keeps eSpeak as its default.
+
+The recognizer asks Vosk for five alternatives. Android receives the ordered
+N-best list, and the command router can select an actionable alternative when
+the first hypothesis contains a near-homophone such as `plate` instead of
+`play`. A dedicated thread continuously drains 100 ms chunks from a two-second
+`AudioRecord` ring while a second thread performs Vosk decoding. The queue is
+bounded by the 15-second recognition window and prevents cold lgraph work from
+overflowing the microphone path. The selected model is loaded and prewarmed
+when the voice interaction service becomes ready, then retained for the app
+process instead of being reloaded for every push-to-talk session.
+
+### Spotify media search
+
+`play Eric Prydz Opus` is sent to Spotify with
+`MediaController.TransportControls.playFromSearch`. An already-active Spotify
+session is preferred; otherwise the assistant connects to Spotify's exported
+`MediaBrowserService` and obtains its session token without opening a phone UI.
+The assistant contains no Spotify SDK, credentials, or proprietary code. Voice
+recognition remains offline, while Spotify playback follows Spotify's own
+network and downloaded-content behavior.
 
 The `aconfig/` directory contains the small Apache-2.0 Caramel release value
 set used by the device product to disable the Pi USB-ALSA enumeration race.
@@ -126,9 +148,12 @@ the small fallback; Kokoro is included by products that set
 ```
 
 The product build signs both prebuilts with the platform key and installs them
-under `/product/priv-app`. The final image also needs the corresponding
-privapp permission allowlist entries for the permissions granted by the target
-AAOS release.
+under `/product/priv-app`. Caramel Voice requests
+`android.permission.MEDIA_CONTENT_CONTROL`; the device product grants that
+signature-or-privileged permission in
+`/product/etc/permissions/privapp-permissions-rpi5.xml` on the same partition
+as the app. `RECORD_AUDIO` remains a user-controllable dangerous permission
+granted by the default-permissions policy.
 
 Because the eSpeak package is a system package in the product image, AOSP's
 `TtsEngines` fallback can select it when `tts_default_synth` is empty. A
@@ -187,6 +212,8 @@ adb -s 192.168.1.56:5555 shell cmd package query-services \
   --brief -a android.speech.RecognitionService
 adb -s 192.168.1.56:5555 shell cmd role get-role-holders \
   android.app.role.ASSISTANT --user 10
+adb -s 192.168.1.56:5555 shell dumpsys package \
+  com.radiosound.caramelvoice | grep -A 12 'install permissions:'
 adb -s 192.168.1.56:5555 logcat -d -s CaramelVoice Vosk TextToSpeech
 ```
 

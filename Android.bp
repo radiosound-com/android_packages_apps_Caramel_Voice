@@ -50,7 +50,7 @@ license {
 
 android_app_import {
     name: "CaramelVoiceAssistant",
-    apk: "app/prebuilts/CaramelVoiceAssistant-0.1.0.apk",
+    apk: "app/prebuilts/CaramelVoiceAssistant-0.2.0.apk",
     certificate: "platform",
     privileged: true,
     product_specific: true,

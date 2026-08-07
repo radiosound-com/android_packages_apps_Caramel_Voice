@@ -32,6 +32,18 @@ final class VoiceCommandRouter {
 
     private VoiceCommandRouter() { }
 
+    static Command routeBest(Iterable<String> alternatives) {
+        Command first = null;
+        if (alternatives != null) {
+            for (String phrase : alternatives) {
+                Command command = route(phrase);
+                if (first == null && command.type != Type.EMPTY) first = command;
+                if (command.type != Type.EMPTY && command.type != Type.ECHO) return command;
+            }
+        }
+        return first == null ? route("") : first;
+    }
+
     static Command route(String phrase) {
         String original = phrase == null ? "" : phrase.trim();
         String normalized = normalize(original);
@@ -58,13 +70,17 @@ final class VoiceCommandRouter {
         }
         if (normalized.startsWith("play ")) {
             return new Command(Type.PLAY,
-                    normalized.substring("play ".length()).trim(), original);
+                    collapseWhitespace(original.substring("play".length()).trim()), original);
         }
         return new Command(Type.ECHO, "", original);
     }
 
     private static String normalize(String phrase) {
-        return phrase.toLowerCase(Locale.US).replaceAll("\\s+", " ").trim();
+        return collapseWhitespace(phrase.toLowerCase(Locale.US));
+    }
+
+    private static String collapseWhitespace(String phrase) {
+        return phrase.replaceAll("\\s+", " ").trim();
     }
 
     private static boolean isTimeQuery(String normalized) {

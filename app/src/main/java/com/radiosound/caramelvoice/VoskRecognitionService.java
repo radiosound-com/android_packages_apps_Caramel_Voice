@@ -11,27 +11,24 @@ import android.util.Log;
 import org.vosk.Model;
 import org.vosk.Recognizer;
 import org.vosk.android.RecognitionListener;
-import org.vosk.android.SpeechService;
+import org.json.JSONArray;
 import org.json.JSONObject;
 
-import java.io.IOException;
 import java.util.ArrayList;
-import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicReference;
 
 public final class VoskRecognitionService extends RecognitionService {
     private static final String TAG = "CaramelVoice";
     private static final long SILENCE_TIMEOUT_MS = 900;
     private static final long LISTENING_TIMEOUT_MS = 15000;
+    private static final int MAX_ALTERNATIVES = 5;
 
     private final ExecutorService executor = Executors.newSingleThreadExecutor();
-    private final CountDownLatch modelLoadComplete = new CountDownLatch(1);
     private final Handler mainHandler = new Handler(Looper.getMainLooper());
-    private volatile Model model;
-    private volatile VoskModelProfile modelProfile;
-    private volatile SpeechService speechService;
+    private volatile BufferedSpeechService speechService;
     private volatile Recognizer activeRecognizer;
     private volatile Runnable silenceFinalizer;
     private volatile Runnable listeningTimeout;
@@ -39,54 +36,43 @@ public final class VoskRecognitionService extends RecognitionService {
     @Override
     public void onCreate() {
         super.onCreate();
-        executor.execute(() -> {
-            try {
-                modelProfile = VoskModelProfile.load();
-                String modelPath = VoskModelStore.sync(this, modelProfile);
-                model = new Model(modelPath);
-                Log.i(TAG, "Vosk model ready: " + modelProfile.modelDirectory + " at " + modelPath);
-            } catch (IOException exception) {
-                Log.e(TAG, "Unable to unpack Vosk model", exception);
-            } finally {
-                modelLoadComplete.countDown();
-            }
-        });
+        VoskModelRepository.preload(this);
     }
 
     @Override
     protected void onStartListening(Intent recognizerIntent, Callback listener) {
         executor.execute(() -> {
             try {
-                if (!modelLoadComplete.await(30, TimeUnit.SECONDS)) {
-                    reportError(listener, SpeechRecognizer.ERROR_SERVER);
-                    return;
-                }
-                Model loadedModel = model;
+                Model loadedModel = VoskModelRepository.await(this, 30, TimeUnit.SECONDS);
                 if (loadedModel == null) {
                     reportError(listener, SpeechRecognizer.ERROR_SERVER);
                     return;
                 }
                 listener.readyForSpeech(new Bundle());
                 Recognizer recognizer = new Recognizer(loadedModel, 16000.0f);
+                recognizer.setMaxAlternatives(MAX_ALTERNATIVES);
                 activeRecognizer = recognizer;
-                SpeechService service = new SpeechService(recognizer, 16000.0f);
+                BufferedSpeechService service = new BufferedSpeechService(recognizer, 16000.0f);
                 speechService = service;
-                final String[] latestText = {""};
+                AtomicReference<ArrayList<String>> latestAlternatives =
+                        new AtomicReference<>(new ArrayList<>());
                 scheduleListeningTimeout(service, listener);
                 if (!service.startListening(new RecognitionListener() {
                     @Override public void onPartialResult(String hypothesis) {
-                        String text = textFromJson(hypothesis);
+                        ArrayList<String> alternatives = textsFromJson(hypothesis);
+                        String text = alternatives.isEmpty() ? "" : alternatives.get(0);
                         if (!text.isEmpty()) {
-                            latestText[0] = text;
+                            latestAlternatives.set(alternatives);
                             sendPartial(listener, text);
                             scheduleSilenceFinalization(service);
                         }
                     }
 
                     @Override public void onResult(String hypothesis) {
-                        String text = textFromJson(hypothesis);
+                        ArrayList<String> alternatives = textsFromJson(hypothesis);
+                        String text = alternatives.isEmpty() ? "" : alternatives.get(0);
                         if (!text.isEmpty()) {
-                            latestText[0] = text;
+                            latestAlternatives.set(alternatives);
                             sendPartial(listener, text);
                             scheduleSilenceFinalization(service);
                         }
@@ -95,15 +81,15 @@ public final class VoskRecognitionService extends RecognitionService {
                     @Override public void onFinalResult(String hypothesis) {
                         cancelRecognitionTimers();
                         closeSpeechService(service, recognizer);
-                        String text = textFromJson(hypothesis);
-                        if (text.isEmpty()) text = latestText[0];
-                        Log.i(TAG, "Vosk final: " + text);
+                        ArrayList<String> alternatives = textsFromJson(hypothesis);
+                        if (alternatives.isEmpty()) alternatives = latestAlternatives.get();
+                        Log.i(TAG, "Vosk final alternatives: " + alternatives);
                         try {
                             listener.endOfSpeech();
                         } catch (Exception exception) {
                             Log.w(TAG, "Unable to report end of speech", exception);
                         }
-                        sendResult(listener, text);
+                        sendResult(listener, alternatives);
                     }
 
                     @Override public void onError(Exception exception) {
@@ -134,30 +120,27 @@ public final class VoskRecognitionService extends RecognitionService {
     @Override
     protected void onStopListening(Callback listener) {
         cancelRecognitionTimers();
-        SpeechService service = speechService;
+        BufferedSpeechService service = speechService;
         if (service != null) service.stop();
     }
 
     @Override
     protected void onCancel(Callback listener) {
         cancelRecognitionTimers();
-        SpeechService service = speechService;
+        BufferedSpeechService service = speechService;
         closeSpeechService(service);
     }
 
     @Override
     public void onDestroy() {
         cancelRecognitionTimers();
-        SpeechService service = speechService;
+        BufferedSpeechService service = speechService;
         closeSpeechService(service);
-        Model loadedModel = model;
-        model = null;
-        if (loadedModel != null) loadedModel.close();
         executor.shutdownNow();
         super.onDestroy();
     }
 
-    private void scheduleSilenceFinalization(SpeechService service) {
+    private void scheduleSilenceFinalization(BufferedSpeechService service) {
         Runnable previous = silenceFinalizer;
         if (previous != null) mainHandler.removeCallbacks(previous);
         Runnable finalizer = () -> {
@@ -170,7 +153,7 @@ public final class VoskRecognitionService extends RecognitionService {
         mainHandler.postDelayed(finalizer, SILENCE_TIMEOUT_MS);
     }
 
-    private void scheduleListeningTimeout(SpeechService service, Callback listener) {
+    private void scheduleListeningTimeout(BufferedSpeechService service, Callback listener) {
         Runnable timeout = () -> {
             if (speechService == service) {
                 Log.i(TAG, "Vosk listening timeout");
@@ -183,11 +166,11 @@ public final class VoskRecognitionService extends RecognitionService {
     }
 
     /** Stop the recognizer thread and release its AudioRecord on every terminal path. */
-    private void closeSpeechService(SpeechService service) {
+    private void closeSpeechService(BufferedSpeechService service) {
         closeSpeechService(service, activeRecognizer);
     }
 
-    private void closeSpeechService(SpeechService service, Recognizer recognizer) {
+    private void closeSpeechService(BufferedSpeechService service, Recognizer recognizer) {
         if (service == null) return;
         if (speechService == service) speechService = null;
         try {
@@ -219,15 +202,30 @@ public final class VoskRecognitionService extends RecognitionService {
         listeningTimeout = null;
     }
 
-    private static String textFromJson(String value) {
+    private static ArrayList<String> textsFromJson(String value) {
+        ArrayList<String> texts = new ArrayList<>();
         try {
             JSONObject json = new JSONObject(value == null ? "{}" : value);
-            String text = json.optString("text", "").trim();
-            if (!text.isEmpty()) return text;
-            return json.optString("partial", "").trim();
+            JSONArray alternatives = json.optJSONArray("alternatives");
+            if (alternatives != null) {
+                for (int index = 0; index < alternatives.length(); index++) {
+                    JSONObject alternative = alternatives.optJSONObject(index);
+                    if (alternative != null) {
+                        addUniqueText(texts, alternative.optString("text", ""));
+                    }
+                }
+            }
+            addUniqueText(texts, json.optString("text", ""));
+            addUniqueText(texts, json.optString("partial", ""));
         } catch (Exception exception) {
-            return value == null ? "" : value;
+            addUniqueText(texts, value);
         }
+        return texts;
+    }
+
+    private static void addUniqueText(ArrayList<String> texts, String value) {
+        String text = value == null ? "" : value.trim();
+        if (!text.isEmpty() && !texts.contains(text)) texts.add(text);
     }
 
     private static void sendPartial(Callback callback, String text) {
@@ -244,10 +242,10 @@ public final class VoskRecognitionService extends RecognitionService {
         }
     }
 
-    private static void sendResult(Callback callback, String text) {
+    private static void sendResult(Callback callback, ArrayList<String> alternatives) {
         Bundle results = new Bundle();
-        ArrayList<String> values = new ArrayList<>();
-        values.add(text);
+        ArrayList<String> values = new ArrayList<>(alternatives);
+        if (values.isEmpty()) values.add("");
         results.putStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION, values);
         try {
             callback.results(results);

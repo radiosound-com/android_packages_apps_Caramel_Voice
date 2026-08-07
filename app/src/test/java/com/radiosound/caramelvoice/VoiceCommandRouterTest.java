@@ -4,6 +4,8 @@ import static org.junit.Assert.assertEquals;
 
 import org.junit.Test;
 
+import java.util.Arrays;
+
 public final class VoiceCommandRouterTest {
     @Test
     public void recognizesTimeWordingAndModelSubstitutions() {
@@ -19,6 +21,26 @@ public final class VoiceCommandRouterTest {
 
         assertEquals(VoiceCommandRouter.Type.NAVIGATE_TO, command.type);
         assertEquals("times square", command.argument);
+    }
+
+    @Test
+    public void extractsMediaSearchWhilePreservingProperNames() {
+        VoiceCommandRouter.Command command = VoiceCommandRouter.route(
+                "  PLAY   Eric Prydz Opus  ");
+
+        assertEquals(VoiceCommandRouter.Type.PLAY, command.type);
+        assertEquals("Eric Prydz Opus", command.argument);
+    }
+
+    @Test
+    public void selectsAnActionableRecognitionAlternative() {
+        VoiceCommandRouter.Command command = VoiceCommandRouter.routeBest(Arrays.asList(
+                "plate Eric Prydz Opus",
+                "play Eric Prydz Opus",
+                "play Eric Prince Opus"));
+
+        assertEquals(VoiceCommandRouter.Type.PLAY, command.type);
+        assertEquals("Eric Prydz Opus", command.argument);
     }
 
     @Test
