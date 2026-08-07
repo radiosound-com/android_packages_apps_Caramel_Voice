@@ -17,13 +17,19 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="16dp"
-            android:text="Offline push-to-talk assistant. Vosk recognition is bundled. Configure the offline eSpeak voice below, or replace it with another compatible system TTS engine."
+            android:text="Offline push-to-talk assistant. Vosk recognition is bundled. Choose eSpeak or the optional neural Kokoro voice, then configure the selected engine below."
             android:textSize="16sp" />
+        <Button
+            android:id="@+id/choose_tts"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="24dp"
+            android:text="Choose offline voice engine" />
         <Button
             android:id="@+id/configure_tts"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="24dp"
-            android:text="Configure offline voice" />
+            android:layout_marginTop="8dp"
+            android:text="Configure selected voice" />
     </LinearLayout>
 </ScrollView>

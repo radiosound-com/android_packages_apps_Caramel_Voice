@@ -1,5 +1,5 @@
 # Caramel Vanilla offline voice stack provenance
-# SHA-256 values were recorded on 2026-08-05.
+# SHA-256 values were recorded on 2026-08-06.
 
 ## Caramel source
 
@@ -64,9 +64,27 @@
 * Patched APK SHA-256: `81e9e3c4761536f424bd37fcd86bef9ee71c3eb5cf0349509b51a395b1b83ebe`
 * Source archive SHA-256: `f93ebf3d8ff2a0d5bdf8833af9b5bb65c59e4b6f3ad6ff6ea26194447e187c02`
 
+## Kokoro Android TTS engine
+
+* Engine: sherpa-onnx v1.13.4, Android SherpaOnnxTtsEngine
+* Engine source: https://github.com/k2-fsa/sherpa-onnx/tree/v1.13.4/android/SherpaOnnxTtsEngine
+* Engine license: Apache-2.0
+* Model: kokoro-en-v0_19 (English, 11 speakers, 24 kHz)
+* Model source: https://github.com/k2-fsa/sherpa-onnx/releases/download/tts-models/kokoro-en-v0_19.tar.bz2
+* Model origin: https://github.com/thewh1teagle/kokoro-onnx/releases/tag/model-files
+* Model license: Apache-2.0; the model LICENSE is retained in the APK assets
+* Android APK: https://huggingface.co/csukuangfj2/sherpa-onnx-apk/resolve/main/tts-engine-new/1.13.4/sherpa-onnx-1.13.4-arm64-v8a-eng-tts-engine-kokoro-en-v0_19.apk
+* APK SHA-256: 4575a5ba1abe7e515e93811588270375fcf3c61140c563921cadf1eb2f24a20d
+* APK size: 316 MiB; it contains the model and arm64-v8a sherpa/ONNX Runtime libraries.
+* ONNX Runtime: MIT; notice in ../LICENSES/MIT.txt.
+* Embedded eSpeak NG pronunciation data: GPL-3.0-only; corresponding source and
+  notices are retained in the eSpeak section above and ../LICENSES/.
+* Speaker IDs: 0 af, 1 af_bella, 2 af_nicole, 3 af_sarah, 4 af_sky, 5 am_adam,
+  6 am_michael, 7 bf_emma, 8 bf_isabella, 9 bm_george, 10 bm_lewis.
+
 ## Built prebuilts
 
 * `app/prebuilts/CaramelVoiceAssistant-0.1.0.apk`
-  SHA-256: `103db42f6fcd0585f5b7f5eb4724ba5767787f4f3845bf4ad003a8a761baa09d`
+  SHA-256: `1deeba6de468a4a16f6cd745d04059493e93c4f80c3accfec81166bd47a2b605`
 * `app/prebuilts/CaramelEspeakTts-1.52.0.apk`
   SHA-256: `81e9e3c4761536f424bd37fcd86bef9ee71c3eb5cf0349509b51a395b1b83ebe`

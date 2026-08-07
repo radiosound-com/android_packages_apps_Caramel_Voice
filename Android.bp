@@ -33,6 +33,21 @@ license {
     ],
 }
 
+license {
+    name: "caramel_voice_kokoro_license",
+    visibility: [":__subpackages__"],
+    license_kinds: [
+        "SPDX-license-identifier-Apache-2.0",
+        "SPDX-license-identifier-GPL-3.0-only",
+        "SPDX-license-identifier-MIT",
+    ],
+    license_text: [
+        "LICENSES/Apache-2.0.txt",
+        "LICENSES/GPL-3.0-only.txt",
+        "LICENSES/MIT.txt",
+    ],
+}
+
 android_app_import {
     name: "CaramelVoiceAssistant",
     apk: "app/prebuilts/CaramelVoiceAssistant-0.1.0.apk",
@@ -49,4 +64,13 @@ android_app_import {
     privileged: true,
     product_specific: true,
     licenses: ["caramel_voice_espeak_license"],
+}
+
+android_app_import {
+    name: "CaramelKokoroTts",
+    apk: "app/prebuilts/SherpaKokoroTts-1.13.4.apk",
+    certificate: "platform",
+    privileged: true,
+    product_specific: true,
+    licenses: ["caramel_voice_kokoro_license"],
 }

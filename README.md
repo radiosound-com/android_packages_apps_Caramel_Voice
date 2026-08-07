@@ -12,6 +12,8 @@ Vanilla on AOSP 16 / AAOS:
   adds the small `uuid` marker expected by Vosk Android's `StorageService`; the
   downloaded model archive itself is retained unchanged under `app/model/`.
   Runtime recognition and speech synthesis do not require a network connection.
+* CaramelKokoroTts is an optional sherpa-onnx Android TTS engine containing
+  the Apache-2.0 Kokoro English model and eleven named speakers.
 
 The command layer currently handles time, opening OsmAnd, Android `geo:` map
 search/navigation phrases, and media placeholders. It checks the common
@@ -53,9 +55,9 @@ m RPI5_AUDIO=usb systemimage -j8
 
 The lgraph model is Apache-2.0 per the Vosk catalog; its URL, hash, size, and
 product inclusion rule are recorded in `provenance/SOURCES.lock`. The larger
-profile currently changes recognition only; TTS remains the eSpeak-NG system
-engine until a neural TTS model and its per-voice license are audited and
-integrated.
+profile currently changes recognition only; the
+aosp_rpi5_car_lgraph_kokoro and aosp_rpi5_car_16gb products also include
+the Kokoro neural TTS engine. The compact product keeps eSpeak as its default.
 
 The `aconfig/` directory contains the small Apache-2.0 Caramel release value
 set used by the device product to disable the Pi USB-ALSA enumeration race.
@@ -82,11 +84,14 @@ Activity. It contains the upstream `COPYING`, `COPYING.APACHE`, and
 
 ## Try other offline voices
 
+Open Caramel Voice's settings page and choose **Choose offline voice engine**.
+This opens Android's TTS picker, where eSpeak and Kokoro can coexist. Then
+choose **Configure selected voice**.
+
 eSpeak NG includes many voice variants without downloading additional model
-files. Open Caramel Voice's settings page and choose **Configure offline
-voice**, then select a variant such as female, male 1--8, Klatt, NVDA, young,
-old, croak, or whisper. The same screen exposes rate, pitch, pitch range, and
-volume controls. For an ADB-only test, launch the engine settings directly:
+files. Its configuration screen exposes female, male 1--8, Klatt, NVDA, young,
+old, croak, whisper, rate, pitch, pitch range, and volume controls. For an
+ADB-only test, launch the selected engine's settings directly:
 
 ```sh
 adb -s 192.168.1.56:5555 shell am start \
@@ -94,12 +99,18 @@ adb -s 192.168.1.56:5555 shell am start \
   -n com.reecedunn.espeak/.TtsSettingsActivity
 ```
 
-These choices change the eSpeak rendering style, but they remain compact
-formant voices; they will not sound like a neural voice. A future Piper-based
-engine is the path to more natural speech, at the cost of a substantially
-larger per-voice model and model-specific license/provenance work. Piper can
-coexist with Vosk because it replaces only the TTS engine; each bundled Piper
-voice must be audited and recorded separately before shipping.
+Kokoro exposes eleven named English speakers: af, af_bella, af_nicole,
+af_sarah, af_sky, am_adam, am_michael, bf_emma, bf_isabella, bm_george,
+and bm_lewis. The upstream configuration screen stores the corresponding
+speaker ID (0--10); the mapping is recorded in provenance/SOURCES.lock so
+users do not have to guess. The selected engine is the engine used by the
+assistant; it is no longer hard-coded to eSpeak.
+
+Kokoro is the natural-speech option for the 4 GB Pi. It uses substantially
+more resident memory than eSpeak, so eSpeak remains installed as a fallback.
+The model and sherpa engine provenance, including the embedded GPL eSpeak
+pronunciation data and MIT ONNX Runtime notice, are recorded in
+provenance/SOURCES.lock.
 
 ## AOSP integration
 

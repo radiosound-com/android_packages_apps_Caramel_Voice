@@ -25,7 +25,6 @@ import java.util.Locale;
 
 public final class CaramelVoiceSession extends VoiceInteractionSession {
     private static final String TAG = "CaramelVoice";
-    private static final String ESPEAK_ENGINE = "com.reecedunn.espeak";
     private static final String OSMAND_NAVIGATE_ACTION =
             "androidx.car.app.action.NAVIGATE";
     private static final String[] OSMAND_PACKAGES = {
@@ -57,12 +56,10 @@ public final class CaramelVoiceSession extends VoiceInteractionSession {
     @Override
     public void onCreate() {
         super.onCreate();
-        // The product includes this engine as a system package. Naming it here
-        // also keeps the assistant's own response path working in a sideloaded
-        // smoke test where AOSP cannot yet select a non-system TTS package.
         tts = new TextToSpeech(context, status -> {
             ttsReady = status == TextToSpeech.SUCCESS;
             if (ttsReady) {
+                Log.i(TAG, "TTS engine initialized: " + tts.getDefaultEngine());
                 tts.setLanguage(Locale.US);
                 tts.setOnUtteranceProgressListener(new UtteranceProgressListener() {
                     @Override public void onStart(String utteranceId) {
@@ -82,7 +79,7 @@ public final class CaramelVoiceSession extends VoiceInteractionSession {
             } else {
                 Log.w(TAG, "No TTS engine initialized; install an offline engine");
             }
-        }, ESPEAK_ENGINE);
+        });
     }
 
     @Override

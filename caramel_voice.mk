@@ -15,12 +15,29 @@ else
 $(error Unsupported CARAMEL_VOICE_ASR_MODEL '$(CARAMEL_VOICE_ASR_MODEL)'; use small or lgraph)
 endif
 
+CARAMEL_VOICE_TTS ?= espeak
+ifeq ($(CARAMEL_VOICE_TTS),espeak)
+CARAMEL_VOICE_TTS_CONFIG := tts-espeak.properties
+else ifeq ($(CARAMEL_VOICE_TTS),kokoro)
+CARAMEL_VOICE_TTS_CONFIG := tts-kokoro.properties
+else
+$(error Unsupported CARAMEL_VOICE_TTS '$(CARAMEL_VOICE_TTS)'; use espeak or kokoro)
+endif
+
 PRODUCT_PACKAGES += \
     CaramelVoiceAssistant \
     CaramelEspeakTts
 
+ifeq ($(CARAMEL_VOICE_TTS),kokoro)
+PRODUCT_PACKAGES += \
+    CaramelKokoroTts
+endif
+
 PRODUCT_COPY_FILES += \
     vendor/radiosound/voiceassistant/config/$(CARAMEL_VOICE_RECOGNITION_CONFIG):$(TARGET_COPY_OUT_PRODUCT)/etc/caramel_voice/recognition.properties
+
+PRODUCT_COPY_FILES += \
+    vendor/radiosound/voiceassistant/config/$(CARAMEL_VOICE_TTS_CONFIG):$(TARGET_COPY_OUT_PRODUCT)/etc/caramel_voice/tts.properties
 
 ifeq ($(CARAMEL_VOICE_ASR_MODEL),lgraph)
 PRODUCT_COPY_FILES += \
