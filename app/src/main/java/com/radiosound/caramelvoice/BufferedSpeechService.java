@@ -29,7 +29,9 @@ import org.vosk.Recognizer;
 import org.vosk.android.RecognitionListener;
 
 import java.io.IOException;
+import java.util.ArrayDeque;
 import java.util.Arrays;
+import java.util.Deque;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -41,16 +43,23 @@ import java.util.concurrent.atomic.AtomicReference;
  * <p>Vosk Android's upstream SpeechService records and decodes on one thread.
  * A cold lgraph decode on a Raspberry Pi 5 can take longer than AudioRecord's
  * native buffer, which makes AudioFlinger discard microphone frames. This
- * implementation keeps a dedicated capture thread and sends bounded 100 ms
- * chunks through a queue to the decoder. The queue is intentionally unbounded:
- * the recognition service limits each session to 15 seconds, so its worst-case
- * payload is only about 480 KiB of 16 kHz mono PCM.</p>
+ * implementation keeps a dedicated capture thread and sends 100 ms chunks
+ * through a queue to the decoder. Source-side voice activity detection removes
+ * idle pre-roll and excess trailing silence before they reach a decoder that is
+ * slower than real time on the 4 GB Pi. The queue is intentionally unbounded,
+ * but the detector caps an utterance at ten seconds (about 320 KiB of PCM).</p>
  */
 final class BufferedSpeechService {
     private static final String TAG = "CaramelVoice";
     private static final float READ_CHUNK_SECONDS = 0.1f;
     private static final float AUDIO_RECORD_BUFFER_SECONDS = 2.0f;
+    private static final int PRE_ROLL_CHUNKS = 3;
+    private static final int TRAILING_AUDIO_CHUNKS = 3;
     private static final short[] END_OF_AUDIO = new short[0];
+
+    interface Listener extends RecognitionListener {
+        void onCaptureStopped(boolean speechDetected);
+    }
 
     private final Recognizer recognizer;
     private final int readChunkSamples;
@@ -97,7 +106,7 @@ final class BufferedSpeechService {
                 + " bytes; capture chunk: " + readChunkSamples + " samples");
     }
 
-    synchronized boolean startListening(RecognitionListener listener) {
+    synchronized boolean startListening(Listener listener) {
         if (captureThread != null || decoderThread != null || recorderReleased.get()) {
             return false;
         }
@@ -152,7 +161,12 @@ final class BufferedSpeechService {
         if (recorderReleased.compareAndSet(false, true)) recorder.release();
     }
 
-    private void capture(RecognitionListener listener) {
+    private void capture(Listener listener) {
+        VoiceActivityDetector detector = new VoiceActivityDetector();
+        Deque<short[]> preRoll = new ArrayDeque<>();
+        Deque<short[]> pendingSilence = new ArrayDeque<>();
+        boolean speechDetected = false;
+        boolean trailingAudioQueued = false;
         try {
             if (stopRequested) return;
             recorder.startRecording();
@@ -171,7 +185,37 @@ final class BufferedSpeechService {
                     throw new IOException("AudioRecord read failed: " + samplesRead);
                 }
                 if (samplesRead > 0) {
-                    audioQueue.put(Arrays.copyOf(buffer, samplesRead));
+                    short[] chunk = Arrays.copyOf(buffer, samplesRead);
+                    VoiceActivityDetector.Event event = detector.accept(chunk, samplesRead);
+                    if (!speechDetected) {
+                        preRoll.offerLast(chunk);
+                        while (preRoll.size() > PRE_ROLL_CHUNKS) preRoll.removeFirst();
+                        if (event == VoiceActivityDetector.Event.SPEECH_STARTED) {
+                            speechDetected = true;
+                            Log.i(TAG, "Vosk source VAD speech start: level="
+                                    + roundedDb(detector.getLastLevelDbfs())
+                                    + " dBFS threshold="
+                                    + roundedDb(detector.getThresholdDbfs()) + " dBFS");
+                            enqueueAll(preRoll);
+                        } else if (event == VoiceActivityDetector.Event.NO_SPEECH_TIMEOUT) {
+                            Log.i(TAG, "Vosk source VAD no-speech timeout");
+                            break;
+                        }
+                    } else if (event == VoiceActivityDetector.Event.QUIET) {
+                        pendingSilence.offerLast(chunk);
+                    } else if (event == VoiceActivityDetector.Event.END_OF_SPEECH) {
+                        pendingSilence.offerLast(chunk);
+                        enqueueFirst(pendingSilence, TRAILING_AUDIO_CHUNKS);
+                        trailingAudioQueued = true;
+                        Log.i(TAG, "Vosk source VAD end: level="
+                                + roundedDb(detector.getLastLevelDbfs())
+                                + " dBFS threshold="
+                                + roundedDb(detector.getThresholdDbfs()) + " dBFS");
+                        break;
+                    } else {
+                        enqueueAll(pendingSilence);
+                        audioQueue.put(chunk);
+                    }
                 }
             }
         } catch (InterruptedException exception) {
@@ -183,6 +227,17 @@ final class BufferedSpeechService {
             }
         } finally {
             stopRecorder();
+            if (speechDetected && !trailingAudioQueued) {
+                try {
+                    enqueueFirst(pendingSilence, TRAILING_AUDIO_CHUNKS);
+                } catch (InterruptedException exception) {
+                    Thread.currentThread().interrupt();
+                }
+            }
+            if (!cancelRequested && terminalFailure.get() == null) {
+                boolean finalSpeechDetected = speechDetected;
+                mainHandler.post(() -> listener.onCaptureStopped(finalSpeechDetected));
+            }
             audioQueue.offer(END_OF_AUDIO);
             synchronized (this) {
                 if (captureThread == Thread.currentThread()) captureThread = null;
@@ -190,7 +245,7 @@ final class BufferedSpeechService {
         }
     }
 
-    private void decode(RecognitionListener listener) {
+    private void decode(Listener listener) {
         try {
             while (!cancelRequested) {
                 short[] buffer = audioQueue.take();
@@ -224,7 +279,7 @@ final class BufferedSpeechService {
         }
     }
 
-    private void postError(RecognitionListener listener, Exception exception) {
+    private void postError(Listener listener, Exception exception) {
         if (!cancelRequested && terminalCallbackPosted.compareAndSet(false, true)) {
             mainHandler.post(() -> listener.onError(exception));
         }
@@ -238,6 +293,21 @@ final class BufferedSpeechService {
         } catch (IllegalStateException exception) {
             Log.w(TAG, "Unable to stop Vosk AudioRecord", exception);
         }
+    }
+
+    private void enqueueAll(Deque<short[]> chunks) throws InterruptedException {
+        while (!chunks.isEmpty()) audioQueue.put(chunks.removeFirst());
+    }
+
+    private void enqueueFirst(Deque<short[]> chunks, int limit) throws InterruptedException {
+        for (int index = 0; index < limit && !chunks.isEmpty(); index++) {
+            audioQueue.put(chunks.removeFirst());
+        }
+        chunks.clear();
+    }
+
+    private static double roundedDb(double value) {
+        return Math.round(value * 10.0) / 10.0;
     }
 
     private static void joinThread(Thread thread) {

@@ -10,7 +10,6 @@ import android.util.Log;
 
 import org.vosk.Model;
 import org.vosk.Recognizer;
-import org.vosk.android.RecognitionListener;
 import org.json.JSONArray;
 import org.json.JSONObject;
 
@@ -22,16 +21,15 @@ import java.util.concurrent.atomic.AtomicReference;
 
 public final class VoskRecognitionService extends RecognitionService {
     private static final String TAG = "CaramelVoice";
-    private static final long SILENCE_TIMEOUT_MS = 900;
-    private static final long LISTENING_TIMEOUT_MS = 15000;
+    private static final long CAPTURE_WATCHDOG_MS = 25000;
+    private static final long PROCESSING_TIMEOUT_MS = 20000;
     private static final int MAX_ALTERNATIVES = 5;
 
     private final ExecutorService executor = Executors.newSingleThreadExecutor();
     private final Handler mainHandler = new Handler(Looper.getMainLooper());
     private volatile BufferedSpeechService speechService;
     private volatile Recognizer activeRecognizer;
-    private volatile Runnable silenceFinalizer;
-    private volatile Runnable listeningTimeout;
+    private volatile Runnable recognitionTimeout;
 
     @Override
     public void onCreate() {
@@ -56,15 +54,26 @@ public final class VoskRecognitionService extends RecognitionService {
                 speechService = service;
                 AtomicReference<ArrayList<String>> latestAlternatives =
                         new AtomicReference<>(new ArrayList<>());
-                scheduleListeningTimeout(service, listener);
-                if (!service.startListening(new RecognitionListener() {
+                scheduleRecognitionTimeout(
+                        service, listener, CAPTURE_WATCHDOG_MS, "capture");
+                if (!service.startListening(new BufferedSpeechService.Listener() {
+                    @Override public void onCaptureStopped(boolean speechDetected) {
+                        Log.i(TAG, "Vosk source capture stopped; speech=" + speechDetected);
+                        try {
+                            listener.endOfSpeech();
+                        } catch (Exception exception) {
+                            Log.w(TAG, "Unable to report end of speech", exception);
+                        }
+                        scheduleRecognitionTimeout(
+                                service, listener, PROCESSING_TIMEOUT_MS, "processing");
+                    }
+
                     @Override public void onPartialResult(String hypothesis) {
                         ArrayList<String> alternatives = textsFromJson(hypothesis);
                         String text = alternatives.isEmpty() ? "" : alternatives.get(0);
                         if (!text.isEmpty()) {
                             latestAlternatives.set(alternatives);
                             sendPartial(listener, text);
-                            scheduleSilenceFinalization(service);
                         }
                     }
 
@@ -74,7 +83,6 @@ public final class VoskRecognitionService extends RecognitionService {
                         if (!text.isEmpty()) {
                             latestAlternatives.set(alternatives);
                             sendPartial(listener, text);
-                            scheduleSilenceFinalization(service);
                         }
                     }
 
@@ -84,11 +92,6 @@ public final class VoskRecognitionService extends RecognitionService {
                         ArrayList<String> alternatives = textsFromJson(hypothesis);
                         if (alternatives.isEmpty()) alternatives = latestAlternatives.get();
                         Log.i(TAG, "Vosk final alternatives: " + alternatives);
-                        try {
-                            listener.endOfSpeech();
-                        } catch (Exception exception) {
-                            Log.w(TAG, "Unable to report end of speech", exception);
-                        }
                         sendResult(listener, alternatives);
                     }
 
@@ -140,29 +143,19 @@ public final class VoskRecognitionService extends RecognitionService {
         super.onDestroy();
     }
 
-    private void scheduleSilenceFinalization(BufferedSpeechService service) {
-        Runnable previous = silenceFinalizer;
+    private void scheduleRecognitionTimeout(
+            BufferedSpeechService service, Callback listener, long delayMs, String phase) {
+        Runnable previous = recognitionTimeout;
         if (previous != null) mainHandler.removeCallbacks(previous);
-        Runnable finalizer = () -> {
-            if (speechService == service) {
-                Log.i(TAG, "Vosk silence timeout; finalizing");
-                service.stop();
-            }
-        };
-        silenceFinalizer = finalizer;
-        mainHandler.postDelayed(finalizer, SILENCE_TIMEOUT_MS);
-    }
-
-    private void scheduleListeningTimeout(BufferedSpeechService service, Callback listener) {
         Runnable timeout = () -> {
             if (speechService == service) {
-                Log.i(TAG, "Vosk listening timeout");
+                Log.i(TAG, "Vosk " + phase + " timeout");
                 closeSpeechService(service);
                 reportError(listener, SpeechRecognizer.ERROR_SPEECH_TIMEOUT);
             }
         };
-        listeningTimeout = timeout;
-        mainHandler.postDelayed(timeout, LISTENING_TIMEOUT_MS);
+        recognitionTimeout = timeout;
+        mainHandler.postDelayed(timeout, delayMs);
     }
 
     /** Stop the recognizer thread and release its AudioRecord on every terminal path. */
@@ -194,12 +187,9 @@ public final class VoskRecognitionService extends RecognitionService {
     }
 
     private void cancelRecognitionTimers() {
-        Runnable finalizer = silenceFinalizer;
-        if (finalizer != null) mainHandler.removeCallbacks(finalizer);
-        silenceFinalizer = null;
-        Runnable timeout = listeningTimeout;
+        Runnable timeout = recognitionTimeout;
         if (timeout != null) mainHandler.removeCallbacks(timeout);
-        listeningTimeout = null;
+        recognitionTimeout = null;
     }
 
     private static ArrayList<String> textsFromJson(String value) {

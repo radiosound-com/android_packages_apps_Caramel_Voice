@@ -93,7 +93,7 @@
 
 ## Built prebuilts
 
-* `app/prebuilts/CaramelVoiceAssistant-0.2.0.apk`
-  SHA-256: `d84eeab0911282ae1a04fd7b864f09669c80b8da3e1ef92c856ce9d774be8d28`
+* `app/prebuilts/CaramelVoiceAssistant-0.2.1.apk`
+  SHA-256: `4577b7df240180c5a4be08c52ced8a7e6d8201721b470b3e79921839184df857`
 * `app/prebuilts/CaramelEspeakTts-1.52.0.apk`
   SHA-256: `81e9e3c4761536f424bd37fcd86bef9ee71c3eb5cf0349509b51a395b1b83ebe`
