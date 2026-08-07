@@ -66,7 +66,12 @@ final class VoskModelStore {
                     throw new IOException("Unexpected Vosk archive entry: " + name);
                 }
                 modelRootSeen = true;
-                File output = new File(temporary, name.substring(root.length()));
+                String relativeName = name.substring(root.length());
+                // ZIPs conventionally contain an explicit top-level directory
+                // entry. It maps to the temporary directory itself and must
+                // not be rejected by the child-path containment check.
+                if (relativeName.isEmpty()) continue;
+                File output = new File(temporary, relativeName);
                 String temporaryPath = temporary.getCanonicalPath() + File.separator;
                 String outputPath = output.getCanonicalPath();
                 if (!outputPath.startsWith(temporaryPath)) {
