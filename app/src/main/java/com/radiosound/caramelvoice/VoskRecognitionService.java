@@ -12,8 +12,6 @@ import org.vosk.Model;
 import org.vosk.Recognizer;
 import org.vosk.android.RecognitionListener;
 import org.vosk.android.SpeechService;
-import org.vosk.android.StorageService;
-
 import org.json.JSONObject;
 
 import java.io.IOException;
@@ -25,8 +23,6 @@ import java.util.concurrent.TimeUnit;
 
 public final class VoskRecognitionService extends RecognitionService {
     private static final String TAG = "CaramelVoice";
-    private static final String MODEL_ASSET = "vosk-model-small-en-us-0.15";
-    private static final String MODEL_DIR = "vosk-model-small-en-us-0.15";
     private static final long SILENCE_TIMEOUT_MS = 900;
     private static final long LISTENING_TIMEOUT_MS = 15000;
 
@@ -34,6 +30,7 @@ public final class VoskRecognitionService extends RecognitionService {
     private final CountDownLatch modelLoadComplete = new CountDownLatch(1);
     private final Handler mainHandler = new Handler(Looper.getMainLooper());
     private volatile Model model;
+    private volatile VoskModelProfile modelProfile;
     private volatile SpeechService speechService;
     private volatile Recognizer activeRecognizer;
     private volatile Runnable silenceFinalizer;
@@ -44,9 +41,10 @@ public final class VoskRecognitionService extends RecognitionService {
         super.onCreate();
         executor.execute(() -> {
             try {
-                String modelPath = StorageService.sync(this, MODEL_ASSET, MODEL_DIR);
+                modelProfile = VoskModelProfile.load();
+                String modelPath = VoskModelStore.sync(this, modelProfile);
                 model = new Model(modelPath);
-                Log.i(TAG, "Vosk model ready at " + modelPath);
+                Log.i(TAG, "Vosk model ready: " + modelProfile.modelDirectory + " at " + modelPath);
             } catch (IOException exception) {
                 Log.e(TAG, "Unable to unpack Vosk model", exception);
             } finally {

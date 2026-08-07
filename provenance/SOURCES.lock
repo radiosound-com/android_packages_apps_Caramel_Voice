@@ -26,6 +26,17 @@
   Alpha Cephei Inc. The README is retained inside the archive.
 * SHA-256: `30f26242c4eb449f948e42cb302dd7a686cb29a3423a8367f99ff41780942498`
 
+## Vosk large-graph model
+
+* Artifact: `vosk-model-en-us-0.22-lgraph.zip`
+* Download: https://alphacephei.com/vosk/models/vosk-model-en-us-0.22-lgraph.zip
+* License: Apache-2.0, per the Vosk model catalog; the model README is
+  retained inside the archive.
+* SHA-256: `d9838b4aaa82a75c4a17f5aca300eaca129aaab2a7cbf951bafbb500eb9c4334`
+* Archive size: 125 MiB; unpacked size: approximately 204 MiB.
+* Product use: included only by `aosp_rpi5_car_16gb`; the compact product
+  does not copy this archive into its image.
+
 ## JNA runtime
 
 * Artifact: `net.java.dev.jna:jna:5.18.1@aar`
@@ -56,6 +67,6 @@
 ## Built prebuilts
 
 * `app/prebuilts/CaramelVoiceAssistant-0.1.0.apk`
-  SHA-256: `7ac4e3edfd3a103674a4c11434d34288cf3aa3a380b7a276850a17663a989217`
+  SHA-256: `3a7e618ffe7deb02328ec49258c5a2aafe9737535a1c404160895f1854fd7c24`
 * `app/prebuilts/CaramelEspeakTts-1.52.0.apk`
   SHA-256: `81e9e3c4761536f424bd37fcd86bef9ee71c3eb5cf0349509b51a395b1b83ebe`
