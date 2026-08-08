@@ -11,6 +11,7 @@ Prydz Opus`, and the recorded coordinate command.
 | Backend/profile | Corpus word edits | Reference words | WER | Notes |
 | --- | ---: | ---: | ---: | --- |
 | Zipformer streaming INT8, production Android decoder | 5 | 93 | 5.4% | Warm replay was 0.08–0.14× real time on the arm64 AVD; model load was 381 ms on that run. |
+| Zipformer INT8 high-memory beam (`threads=6`, `max_active_paths=8`) | 5 | 93 | 5.4% | No corpus accuracy gain; warm replay was about 0.15–0.21× real time on the same AVD. |
 | Vosk `vosk-model-small-en-us-0.15` | 11 | 93 | 11.8% | Compact fallback. |
 | Vosk `vosk-model-en-us-0.22-lgraph` | 7 | 93 | 7.5% | Better raw artist spelling than Zipformer on this corpus; retained as the robustness-oriented alternative. |
 | Whisper `small.en-q5_1` | — | — | — | Semantically correct intent on all twelve files; rendered `Prydz` as `Prid's` and emitted numeric coordinates. Raw word WER is not comparable without a number normalization policy. |
