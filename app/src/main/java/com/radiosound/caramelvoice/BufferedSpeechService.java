@@ -25,9 +25,6 @@ import android.os.Handler;
 import android.os.Looper;
 import android.util.Log;
 
-import org.vosk.Recognizer;
-import org.vosk.android.RecognitionListener;
-
 import java.io.IOException;
 import java.util.ArrayDeque;
 import java.util.Arrays;
@@ -38,10 +35,10 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 
 /**
- * Vosk microphone loop that drains AudioRecord independently of decoding.
+ * Microphone loop that drains AudioRecord independently of decoding.
  *
- * <p>Vosk Android's upstream SpeechService records and decodes on one thread.
- * A cold lgraph decode on a Raspberry Pi 5 can take longer than AudioRecord's
+ * <p>Some recognizers record and decode on one thread. A cold decoder on a Raspberry Pi 5
+ * can take longer than AudioRecord's
  * native buffer, which makes AudioFlinger discard microphone frames. This
  * implementation keeps a dedicated capture thread and sends 100 ms chunks
  * through a queue to the decoder. Source-side voice activity detection removes
@@ -57,11 +54,16 @@ final class BufferedSpeechService {
     private static final int TRAILING_AUDIO_CHUNKS = 3;
     private static final short[] END_OF_AUDIO = new short[0];
 
-    interface Listener extends RecognitionListener {
+    interface Listener {
         void onCaptureStopped(boolean speechDetected);
+        void onPartialResult(String hypothesis);
+        void onResult(String hypothesis);
+        void onFinalResult(String hypothesis);
+        void onError(Exception exception);
+        void onTimeout();
     }
 
-    private final Recognizer recognizer;
+    private final StreamingSpeechDecoder decoder;
     private final int readChunkSamples;
     private final AudioRecord recorder;
     private final Handler mainHandler = new Handler(Looper.getMainLooper());
@@ -76,8 +78,8 @@ final class BufferedSpeechService {
     private volatile boolean stopRequested;
 
     @SuppressLint("MissingPermission")
-    BufferedSpeechService(Recognizer recognizer, float sampleRate) throws IOException {
-        this.recognizer = recognizer;
+    BufferedSpeechService(StreamingSpeechDecoder decoder, float sampleRate) throws IOException {
+        this.decoder = decoder;
         int sampleRateHz = Math.round(sampleRate);
         readChunkSamples = Math.round(sampleRateHz * READ_CHUNK_SECONDS);
         int desiredBufferBytes = Math.round(
@@ -102,7 +104,7 @@ final class BufferedSpeechService {
             throw new IOException(
                     "Failed to initialize recorder; the microphone may already be in use");
         }
-        Log.i(TAG, "Vosk AudioRecord buffer: " + audioRecordBufferBytes
+        Log.i(TAG, "Speech AudioRecord buffer: " + audioRecordBufferBytes
                 + " bytes; capture chunk: " + readChunkSamples + " samples");
     }
 
@@ -116,8 +118,8 @@ final class BufferedSpeechService {
         terminalCallbackPosted.set(false);
         audioQueue.clear();
 
-        Thread decoder = new Thread(() -> decode(listener), "CaramelVoskDecode");
-        Thread capture = new Thread(() -> capture(listener), "CaramelVoskCapture");
+        Thread decoder = new Thread(() -> decode(listener), "CaramelSpeechDecode");
+        Thread capture = new Thread(() -> capture(listener), "CaramelSpeechCapture");
         decoderThread = decoder;
         captureThread = capture;
         decoder.start();
@@ -192,13 +194,13 @@ final class BufferedSpeechService {
                         while (preRoll.size() > PRE_ROLL_CHUNKS) preRoll.removeFirst();
                         if (event == VoiceActivityDetector.Event.SPEECH_STARTED) {
                             speechDetected = true;
-                            Log.i(TAG, "Vosk source VAD speech start: level="
+                            Log.i(TAG, "Speech source VAD speech start: level="
                                     + roundedDb(detector.getLastLevelDbfs())
                                     + " dBFS threshold="
                                     + roundedDb(detector.getThresholdDbfs()) + " dBFS");
                             enqueueAll(preRoll);
                         } else if (event == VoiceActivityDetector.Event.NO_SPEECH_TIMEOUT) {
-                            Log.i(TAG, "Vosk source VAD no-speech timeout");
+                            Log.i(TAG, "Speech source VAD no-speech timeout");
                             break;
                         }
                     } else if (event == VoiceActivityDetector.Event.QUIET) {
@@ -207,7 +209,7 @@ final class BufferedSpeechService {
                         pendingSilence.offerLast(chunk);
                         enqueueFirst(pendingSilence, TRAILING_AUDIO_CHUNKS);
                         trailingAudioQueued = true;
-                        Log.i(TAG, "Vosk source VAD end: level="
+                        Log.i(TAG, "Speech source VAD end: level="
                                 + roundedDb(detector.getLastLevelDbfs())
                                 + " dBFS threshold="
                                 + roundedDb(detector.getThresholdDbfs()) + " dBFS");
@@ -251,17 +253,17 @@ final class BufferedSpeechService {
                 short[] buffer = audioQueue.take();
                 if (buffer == END_OF_AUDIO) break;
 
-                if (recognizer.acceptWaveForm(buffer, buffer.length)) {
-                    String result = recognizer.getResult();
-                    mainHandler.post(() -> listener.onResult(result));
+                StreamingSpeechDecoder.Result result =
+                        decoder.acceptWaveform(buffer, buffer.length);
+                if (result.segmentComplete) {
+                    mainHandler.post(() -> listener.onResult(result.hypothesis));
                 } else {
-                    String partial = recognizer.getPartialResult();
-                    mainHandler.post(() -> listener.onPartialResult(partial));
+                    mainHandler.post(() -> listener.onPartialResult(result.hypothesis));
                 }
             }
 
             if (!cancelRequested && terminalFailure.get() == null) {
-                String finalResult = recognizer.getFinalResult();
+                String finalResult = decoder.finish();
                 if (terminalCallbackPosted.compareAndSet(false, true)) {
                     mainHandler.post(() -> listener.onFinalResult(finalResult));
                 }

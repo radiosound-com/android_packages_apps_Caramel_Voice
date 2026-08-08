@@ -1,5 +1,5 @@
 # Caramel Vanilla offline voice stack provenance
-# SHA-256 values were recorded on 2026-08-06.
+# SHA-256 values were recorded on 2026-08-06 and 2026-08-07.
 
 ## Caramel source
 
@@ -37,9 +37,9 @@
   retained inside the archive.
 * SHA-256: `d9838b4aaa82a75c4a17f5aca300eaca129aaab2a7cbf951bafbb500eb9c4334`
 * Archive size: 125 MiB; unpacked size: approximately 204 MiB.
-* Product use: included by `aosp_rpi5_car_lgraph`,
-  `aosp_rpi5_car_lgraph_kokoro`, and `aosp_rpi5_car_16gb`; the compact product
-  does not copy this archive into its image.
+* Product use: included by `aosp_rpi5_car_lgraph` and
+  `aosp_rpi5_car_lgraph_kokoro`; the compact, Zipformer, and 16 GB products do
+  not copy this archive into their images.
 
 ## JNA runtime
 
@@ -51,6 +51,75 @@
   notices are in `../LICENSES/`.
 * AAR SHA-256: `7f053e3ec99e14dd71259c82c1c8a02738d64a13c31226b2acc170f3060951e0`
 * Sources SHA-256: `0b9224e215b3c6a464959e3f994ddd64c14d46fb4014facd6afa1cc18e469466`
+
+## sherpa-onnx Android ASR runtime
+
+* Upstream: https://github.com/k2-fsa/sherpa-onnx/tree/v1.13.4
+* Tag: `v1.13.4`
+* Commit: `142807252687d81b40d6315f23470a1512a00de3`
+* Source archive:
+  `provenance/sources/sherpa-onnx-v1.13.4-142807252687d81b40d6315f23470a1512a00de3.tar.gz`
+* Source archive SHA-256:
+  `11d1be9ab4a0c67d5cb238ca554522752c5e981173f91d42ddcda1b79b260c38`
+* Android AAR: `app/libs/sherpa-onnx-1.13.4-arm64-v8a.aar`
+* Android AAR SHA-256:
+  `395d364c83eec7572834c204812570d664987dae712c211c4ef1a8738e96463f`
+* License: Apache-2.0; notice in `../LICENSES/Apache-2.0.txt` and source
+  archive.
+* ONNX Runtime: 1.27.0, MIT; `libonnxruntime.so` is included in the AAR and
+  the notice is in `../LICENSES/MIT.txt`.
+* Build environment: Android NDK `27.2.12479018`, Android platform 28,
+  arm64-v8a, shared ONNX Runtime, JNI enabled, TTS and speaker diarization
+  disabled. `../scripts/rebuild-sherpa-onnx-aar.sh` rebuilds the checked AAR
+  from either the pinned archive or an exact git checkout.
+
+## Kotlin runtime for the sherpa Java API
+
+* Artifact: `org.jetbrains.kotlin:kotlin-stdlib:1.7.20`
+* Download: https://repo1.maven.org/maven2/org/jetbrains/kotlin/kotlin-stdlib/1.7.20/kotlin-stdlib-1.7.20.jar
+* Source artifact: https://repo1.maven.org/maven2/org/jetbrains/kotlin/kotlin-stdlib/1.7.20/kotlin-stdlib-1.7.20-sources.jar
+* Binary: `app/libs/kotlin-stdlib-1.7.20.jar`
+* Sources: `provenance/sources/kotlin-stdlib-1.7.20-sources.jar`
+* License: Apache-2.0.
+* Binary SHA-256:
+  `7779ec96b9acbf92ca023858ac04543f9d2c3bdf1722425fff42f25ff3acfc9b`
+* Sources SHA-256:
+  `e810572ae00218b845036c707660654817528dc792e0eea1f71e3094d3a6fe03`
+
+## Streaming INT8 Zipformer English model
+
+* Artifact: `sherpa-onnx-streaming-zipformer-en-2023-06-21.tar.bz2`
+* Download: https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-streaming-zipformer-en-2023-06-21.tar.bz2
+* Archive SHA-256:
+  `455f40e556aa2b20ac9d3bffd603b58002075c1193b4070938540c11efe0a4da`
+* Archive size: 506,956,414 bytes. The repository retains only the selected
+  INT8 streaming files used by the product, not the unused FP32 models and
+  test WAVs from the archive.
+* Model origin:
+  https://huggingface.co/marcoyang/icefall-libri-giga-pruned-transducer-stateless7-streaming-2023-04-04
+* License: Apache-2.0. The upstream model README declaring the license is
+  retained beside the model files and copied into the product image.
+* Original `bpe.model` SHA-256:
+  `c53433de083c4a6ad12d034550ef22de68cec62c4f58932a7b6b8b2f1e743fa5`
+* `bpe.vocab` was deterministically exported from that model with sherpa-onnx
+  v1.13.4 `scripts/export_bpe_vocab.py` and sentencepiece 0.2.2. Its SHA-256
+  is `f191a4935f668fa8cd8e607bcd378404f948321cd3134a5ea13d324ba921673d`.
+* Selected-file SHA-256 values:
+  * `encoder-epoch-99-avg-1.int8.onnx`:
+    `32c98281c7bd8b63e3e142d007251b37f120572e8fdea9a4f5a79ce22b10ec4f`
+  * `decoder-epoch-99-avg-1.onnx`:
+    `9da02b77cb08826756ec6a88635f35a40374e4164e7c6359121a9145958a6ceb`
+  * `joiner-epoch-99-avg-1.int8.onnx`:
+    `831477d390e59a61f1b6a6f763b9903e6c6366ff6034f1ddba613be82637122f`
+  * `tokens.txt`:
+    `49e3c2646595fd907228b3c6787069658f67b17377c60aeb8619c4551b2316fb`
+  * `README.md`:
+    `eca6e2608d835c6b7ad596b659006dab216ab364928358a96d414e3e1ea4de04`
+* `../scripts/fetch-zipformer-assets.sh` downloads the original archive,
+  verifies it, selects the shipped files, regenerates `bpe.vocab`, and verifies
+  every output.
+* Product use: selected by `CARAMEL_VOICE_ASR_MODEL := zipformer-int8`; copied
+  to `/product/etc/caramel_voice/models/` and never downloaded at runtime.
 
 ## eSpeak NG Android TTS
 
@@ -80,6 +149,7 @@
 * Upstream APK baseline: https://huggingface.co/csukuangfj2/sherpa-onnx-apk/resolve/main/tts-engine-new/1.13.4/sherpa-onnx-1.13.4-arm64-v8a-eng-tts-engine-kokoro-en-v0_19.apk
 * Upstream APK SHA-256: 4575a5ba1abe7e515e93811588270375fcf3c61140c563921cadf1eb2f24a20d
 * Caramel APK patch: provenance/patches/sherpa-kokoro-named-voices.patch
+* Caramel patch SHA-256: 25941895486d7c1f0d01ed34c40823aa3c5bc9a4b29da30d00acf8ad56069e30
 * Caramel unsigned APK SHA-256: d08850d9248cda7e477be6a7354085132b5a0c086eb572542a3666eef09fdb03
 * Caramel APK size: 316 MiB; it contains the model and arm64-v8a sherpa/ONNX Runtime libraries.
 * ONNX Runtime: MIT; notice in ../LICENSES/MIT.txt.
@@ -93,7 +163,9 @@
 
 ## Built prebuilts
 
-* `app/prebuilts/CaramelVoiceAssistant-0.2.1.apk`
-  SHA-256: `4577b7df240180c5a4be08c52ced8a7e6d8201721b470b3e79921839184df857`
+* `app/prebuilts/CaramelVoiceAssistant-0.3.0.apk`
+  SHA-256: `b0ab93051ae52d5fe884795db6d1b49952bb34547cfeef7503ab43a2ebb1d5b4`
 * `app/prebuilts/CaramelEspeakTts-1.52.0.apk`
   SHA-256: `81e9e3c4761536f424bd37fcd86bef9ee71c3eb5cf0349509b51a395b1b83ebe`
+* `app/prebuilts/SherpaKokoroTts-1.13.4.apk`
+  SHA-256: `d08850d9248cda7e477be6a7354085132b5a0c086eb572542a3666eef09fdb03`

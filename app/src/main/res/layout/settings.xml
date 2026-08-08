@@ -17,7 +17,7 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="16dp"
-            android:text="Offline push-to-talk assistant. Vosk recognition is bundled. Choose eSpeak or the optional neural Kokoro voice, then configure the selected engine below."
+            android:text="Offline push-to-talk assistant with product-selectable Vosk or Zipformer recognition. Choose eSpeak or the optional neural Kokoro voice, then configure the selected engine below."
             android:textSize="16sp" />
         <Button
             android:id="@+id/choose_tts"
