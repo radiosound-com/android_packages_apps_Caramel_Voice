@@ -1,3 +1,8 @@
+/*
+ * Copyright 2026 Radio Sound, Inc.
+ * Licensed under the Apache License, Version 2.0.
+ */
+
 package com.radiosound.caramelvoice;
 
 import android.content.Intent;
@@ -8,58 +13,61 @@ import android.speech.RecognitionService;
 import android.speech.SpeechRecognizer;
 import android.util.Log;
 
-import org.vosk.Model;
-import org.vosk.Recognizer;
 import java.util.ArrayList;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 
-public final class VoskRecognitionService extends RecognitionService {
+/** Android RecognitionService backed by a context-biased streaming INT8 Zipformer. */
+public final class SherpaRecognitionService extends RecognitionService {
     private static final String TAG = "CaramelVoice";
     private static final long CAPTURE_WATCHDOG_MS = 25000;
-    private static final long PROCESSING_TIMEOUT_MS = 20000;
-    private static final int MAX_ALTERNATIVES = 5;
+    private static final long PROCESSING_TIMEOUT_MS = 10000;
 
     private final ExecutorService executor = Executors.newSingleThreadExecutor();
     private final Handler mainHandler = new Handler(Looper.getMainLooper());
     private volatile BufferedSpeechService speechService;
-    private volatile CloseOnce<Recognizer> activeRecognizer;
+    private volatile CloseOnce<StreamingSpeechDecoder> activeDecoder;
     private volatile Runnable recognitionTimeout;
 
     @Override
     public void onCreate() {
         super.onCreate();
-        VoskModelRepository.preload(this);
+        SherpaModelRepository.preload(this);
     }
 
     @Override
     protected void onStartListening(Intent recognizerIntent, Callback listener) {
         executor.execute(() -> {
-            CloseOnce<Recognizer> recognizerOwner = null;
+            CloseOnce<StreamingSpeechDecoder> decoderOwner = null;
             try {
-                Model loadedModel = VoskModelRepository.await(this, 30, TimeUnit.SECONDS);
-                if (loadedModel == null) {
+                SherpaModelRepository.Lease lease =
+                        SherpaModelRepository.acquire(this, 30, TimeUnit.SECONDS);
+                if (lease == null) {
                     reportError(listener, SpeechRecognizer.ERROR_SERVER);
                     return;
                 }
+                SherpaStreamingSpeechDecoder decoder;
+                try {
+                    decoder = new SherpaStreamingSpeechDecoder(lease);
+                } catch (RuntimeException | UnsatisfiedLinkError exception) {
+                    lease.close();
+                    throw exception;
+                }
+                decoderOwner = new CloseOnce<>(decoder);
+                activeDecoder = decoderOwner;
                 listener.readyForSpeech(new Bundle());
-                Recognizer recognizer = new Recognizer(loadedModel, 16000.0f);
-                recognizer.setMaxAlternatives(MAX_ALTERNATIVES);
-                recognizerOwner = new CloseOnce<>(recognizer);
-                activeRecognizer = recognizerOwner;
-                CloseOnce<Recognizer> sessionRecognizer = recognizerOwner;
-                BufferedSpeechService service = new BufferedSpeechService(
-                        new VoskStreamingSpeechDecoder(recognizer), 16000.0f);
+
+                BufferedSpeechService service = new BufferedSpeechService(decoder, 16000.0f);
                 speechService = service;
                 AtomicReference<ArrayList<String>> latestAlternatives =
                         new AtomicReference<>(new ArrayList<>());
-                scheduleRecognitionTimeout(
-                        service, listener, CAPTURE_WATCHDOG_MS, "capture");
+                CloseOnce<StreamingSpeechDecoder> sessionDecoder = decoderOwner;
+                scheduleRecognitionTimeout(service, listener, CAPTURE_WATCHDOG_MS, "capture");
                 if (!service.startListening(new BufferedSpeechService.Listener() {
                     @Override public void onCaptureStopped(boolean speechDetected) {
-                        Log.i(TAG, "Vosk source capture stopped; speech=" + speechDetected);
+                        Log.i(TAG, "Zipformer source capture stopped; speech=" + speechDetected);
                         try {
                             listener.endOfSpeech();
                         } catch (Exception exception) {
@@ -80,47 +88,40 @@ public final class VoskRecognitionService extends RecognitionService {
                     }
 
                     @Override public void onResult(String hypothesis) {
-                        ArrayList<String> alternatives =
-                                RecognitionResultParser.textsFromJson(hypothesis);
-                        String text = alternatives.isEmpty() ? "" : alternatives.get(0);
-                        if (!text.isEmpty()) {
-                            latestAlternatives.set(alternatives);
-                            sendPartial(listener, text);
-                        }
+                        onPartialResult(hypothesis);
                     }
 
                     @Override public void onFinalResult(String hypothesis) {
                         cancelRecognitionTimers();
-                        closeSpeechService(service, sessionRecognizer);
+                        closeSpeechService(service, sessionDecoder);
                         ArrayList<String> alternatives =
                                 RecognitionResultParser.textsFromJson(hypothesis);
                         if (alternatives.isEmpty()) alternatives = latestAlternatives.get();
-                        Log.i(TAG, "Vosk final alternatives: " + alternatives);
+                        Log.i(TAG, "Zipformer final alternatives: " + alternatives);
                         sendResult(listener, alternatives);
                     }
 
                     @Override public void onError(Exception exception) {
                         cancelRecognitionTimers();
-                        closeSpeechService(service, sessionRecognizer);
-                        Log.e(TAG, "Vosk audio error", exception);
+                        closeSpeechService(service, sessionDecoder);
+                        Log.e(TAG, "Zipformer audio error", exception);
                         reportError(listener, SpeechRecognizer.ERROR_AUDIO);
                     }
 
                     @Override public void onTimeout() {
                         cancelRecognitionTimers();
-                        closeSpeechService(service, sessionRecognizer);
+                        closeSpeechService(service, sessionDecoder);
                         reportError(listener, SpeechRecognizer.ERROR_SPEECH_TIMEOUT);
                     }
                 })) {
-                    closeSpeechService(service, sessionRecognizer);
+                    closeSpeechService(service, sessionDecoder);
                     reportError(listener, SpeechRecognizer.ERROR_CLIENT);
                     return;
                 }
-                Log.i(TAG, "Vosk recognizer started at 16000 Hz");
-            } catch (Exception exception) {
-                Log.e(TAG, "Unable to start Vosk recognizer", exception);
-                if (activeRecognizer == recognizerOwner) activeRecognizer = null;
-                closeRecognizer(recognizerOwner);
+                Log.i(TAG, "Zipformer recognizer started at 16000 Hz");
+            } catch (Exception | UnsatisfiedLinkError exception) {
+                Log.e(TAG, "Unable to start Zipformer recognizer", exception);
+                if (decoderOwner != null) closeDecoder(decoderOwner);
                 reportError(listener, SpeechRecognizer.ERROR_CLIENT);
             }
         });
@@ -136,15 +137,13 @@ public final class VoskRecognitionService extends RecognitionService {
     @Override
     protected void onCancel(Callback listener) {
         cancelRecognitionTimers();
-        BufferedSpeechService service = speechService;
-        closeSpeechService(service);
+        closeSpeechService(speechService);
     }
 
     @Override
     public void onDestroy() {
         cancelRecognitionTimers();
-        BufferedSpeechService service = speechService;
-        closeSpeechService(service);
+        closeSpeechService(speechService);
         executor.shutdownNow();
         super.onDestroy();
     }
@@ -155,7 +154,7 @@ public final class VoskRecognitionService extends RecognitionService {
         if (previous != null) mainHandler.removeCallbacks(previous);
         Runnable timeout = () -> {
             if (speechService == service) {
-                Log.i(TAG, "Vosk " + phase + " timeout");
+                Log.i(TAG, "Zipformer " + phase + " timeout");
                 closeSpeechService(service);
                 reportError(listener, SpeechRecognizer.ERROR_SPEECH_TIMEOUT);
             }
@@ -164,35 +163,34 @@ public final class VoskRecognitionService extends RecognitionService {
         mainHandler.postDelayed(timeout, delayMs);
     }
 
-    /** Stop the recognizer thread and release its AudioRecord on every terminal path. */
     private void closeSpeechService(BufferedSpeechService service) {
-        closeSpeechService(service, activeRecognizer);
+        closeSpeechService(service, activeDecoder);
     }
 
     private void closeSpeechService(
-            BufferedSpeechService service, CloseOnce<Recognizer> recognizerOwner) {
+            BufferedSpeechService service, CloseOnce<StreamingSpeechDecoder> decoderOwner) {
         if (service == null) return;
         if (speechService == service) speechService = null;
         try {
             service.cancel();
         } catch (RuntimeException exception) {
-            Log.w(TAG, "Unable to cancel Vosk recognizer", exception);
+            Log.w(TAG, "Unable to cancel Zipformer recognizer", exception);
         }
         try {
             service.shutdown();
         } catch (RuntimeException exception) {
-            Log.w(TAG, "Unable to release Vosk AudioRecord", exception);
+            Log.w(TAG, "Unable to release Zipformer AudioRecord", exception);
         }
-        if (activeRecognizer == recognizerOwner) activeRecognizer = null;
-        closeRecognizer(recognizerOwner);
+        if (activeDecoder == decoderOwner) activeDecoder = null;
+        closeDecoder(decoderOwner);
     }
 
-    private static void closeRecognizer(CloseOnce<Recognizer> recognizerOwner) {
-        if (recognizerOwner == null) return;
+    private static void closeDecoder(CloseOnce<StreamingSpeechDecoder> decoderOwner) {
+        if (decoderOwner == null) return;
         try {
-            recognizerOwner.close();
+            decoderOwner.close();
         } catch (Exception exception) {
-            Log.w(TAG, "Unable to release Vosk recognizer", exception);
+            Log.w(TAG, "Unable to release Zipformer stream", exception);
         }
     }
 
@@ -204,7 +202,7 @@ public final class VoskRecognitionService extends RecognitionService {
 
     private static void sendPartial(Callback callback, String text) {
         if (text.isEmpty()) return;
-        Log.i(TAG, "Vosk partial: " + text);
+        Log.i(TAG, "Zipformer partial: " + text);
         Bundle results = new Bundle();
         ArrayList<String> values = new ArrayList<>();
         values.add(text);

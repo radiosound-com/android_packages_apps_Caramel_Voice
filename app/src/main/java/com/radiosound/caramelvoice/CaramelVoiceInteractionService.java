@@ -12,7 +12,13 @@ public final class CaramelVoiceInteractionService extends VoiceInteractionServic
     @Override
     public void onReady() {
         super.onReady();
-        VoskModelRepository.preload(this);
+        RecognitionContextRepository.preload(this);
+        if (RecognitionBackendProfile.load().engine
+                == RecognitionBackendProfile.Engine.ZIPFORMER) {
+            SherpaModelRepository.preload(this);
+        } else {
+            VoskModelRepository.preload(this);
+        }
         Log.i(TAG, "Caramel Voice is ready");
     }
 

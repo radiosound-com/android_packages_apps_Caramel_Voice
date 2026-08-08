@@ -10,9 +10,13 @@ license {
     visibility: [":__subpackages__"],
     license_kinds: [
         "SPDX-license-identifier-Apache-2.0",
+        "SPDX-license-identifier-MIT",
     ],
     license_text: [
         "LICENSE",
+        "LICENSES/JNA-Apache-2.0.txt",
+        "LICENSES/Vosk-Apache-2.0.txt",
+        "LICENSES/MIT.txt",
     ],
 }
 
@@ -50,7 +54,7 @@ license {
 
 android_app_import {
     name: "CaramelVoiceAssistant",
-    apk: "app/prebuilts/CaramelVoiceAssistant-0.2.1.apk",
+    apk: "app/prebuilts/CaramelVoiceAssistant-0.3.0.apk",
     certificate: "platform",
     privileged: true,
     product_specific: true,

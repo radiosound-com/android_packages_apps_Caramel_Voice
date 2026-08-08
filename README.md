@@ -4,20 +4,23 @@ This project supplies the first offline voice-assistant slice for Caramel
 Vanilla on AOSP 16 / AAOS:
 
 * `CaramelVoiceAssistant` is a privileged AAOS `VoiceInteractionService` with
-  a PTT session, a Vosk `RecognitionService`, and a small deterministic command
-  layer.
+  a PTT session, product-selectable Vosk or streaming Zipformer recognition,
+  and a small deterministic command layer.
 * `CaramelEspeakTts` is the upstream eSpeak Android TTS APK, built from the
   pinned GPL source snapshot in `provenance/sources/`.
-* The Vosk US-English mobile model is embedded in the assistant APK. The build
+* The compact Vosk US-English mobile model is embedded in the assistant APK. The build
   adds the small `uuid` marker expected by Vosk Android's `StorageService`; the
   downloaded model archive itself is retained unchanged under `app/model/`.
   Runtime recognition and speech synthesis do not require a network connection.
 * CaramelKokoroTts is an optional sherpa-onnx Android TTS engine containing
   the Apache-2.0 Kokoro English model and eleven named speakers.
+* The optional INT8 Zipformer profile keeps its 179 MiB encoder and companion
+  files under `/product/etc/caramel_voice/models/`; it is never downloaded at
+  runtime and remains responsive on the 4 GB Pi.
 
 The command layer currently handles time, opening OsmAnd, Android `geo:` map
-search/navigation phrases, and `play …` searches through Spotify's standard
-Android media session. It checks the common
+search/navigation phrases, and `play …` searches through standard Android
+media sessions and media browsers. It checks the common
 OsmAnd package names (`net.osmand.dev`, `net.osmand.plus`, and `net.osmand`)
 so the product can use either the development or release build. It is
 intentionally deterministic and does not claim to be a general-purpose LLM
@@ -31,35 +34,54 @@ export ANDROID_HOME=/path/to/android-sdk
 ```
 
 The product app has minimum and target API 36 because it is built specifically
-for Caramel Vanilla AOSP 16. The Vosk AAR and model archive are checked by SHA-256
-in `provenance/SOURCES.lock`. The host unit tests cover command normalization,
-time-query substitutions, navigation and media-query extraction, N-best
-command selection, and safe fallback to an echo response.
+for Caramel Vanilla AOSP 16. Every checked-in runtime, model, source snapshot,
+and built APK is pinned by SHA-256 in `provenance/SOURCES.lock`. The host unit
+tests cover command normalization, time-query substitutions, navigation and
+media-query extraction, N-best command selection, context resolution, backend
+selection, and one-time native resource ownership.
 
 ### Recognition model profiles
 
 The default `aosp_rpi5_car-caramel-userdebug` product uses the compact
 `vosk-model-small-en-us-0.15` archive embedded in the assistant APK. The
-`aosp_rpi5_car_lgraph-caramel-userdebug` product selects Vosk's
-`vosk-model-en-us-0.22-lgraph` model, which is a reasonable larger profile for
-a 4 GB Pi with measured headroom. The same lgraph profile is selected by
-`aosp_rpi5_car_16gb-caramel-userdebug`.
+`aosp_rpi5_car_lgraph-caramel-userdebug` product retains Vosk's
+`vosk-model-en-us-0.22-lgraph` as a compatibility profile.
 
-The 125 MiB lgraph archive is copied only to the larger products at
-`/product/etc/caramel_voice/models/` and extracted lazily into the app's
-private no-backup directory. The model selector is therefore reproducible at
-build time and the compact image does not carry the larger archive:
+The recommended high-quality 4 GB profiles are
+`aosp_rpi5_car_zipformer-caramel-userdebug` and
+`aosp_rpi5_car_zipformer_kokoro-caramel-userdebug`; the latter also selects the
+neural Kokoro voice. The 16 GB product currently uses that same validated
+Zipformer/Kokoro pair. Products can select the backend directly with:
+
+```make
+CARAMEL_VOICE_ASR_MODEL := zipformer-int8
+```
+
+On the 4 GB Pi 5, the selected INT8 Zipformer loaded in about 1.3--1.7 seconds,
+held the assistant near 395 MiB RSS, and decoded the twelve-command recorded
+corpus in 7.66 seconds total (including a 1.73-second process/model load). A
+context-biased `Play Eric Prydz Opus` three-utterance run completed in 2.95
+seconds including model load and recognized all three exactly. The equivalent
+Whisper.cpp `small.en-q5_1` evaluation was accurate but ran at 0.98 real-time
+factor, so Whisper is reserved for a future optional second pass rather than
+the push-to-talk primary on a 4 GB board.
+
+Selected larger models are copied only to
+`/product/etc/caramel_voice/models/`. Vosk lgraph is extracted lazily into the
+app's private no-backup directory; Zipformer maps its ONNX files directly from
+the read-only product partition. The selector is reproducible at build time
+and the compact image does not carry either larger model:
 
 ```sh
-lunch aosp_rpi5_car_lgraph-caramel-userdebug
+lunch aosp_rpi5_car_zipformer_kokoro-caramel-userdebug
 RPI5_AUDIO=usb m systemimage -j8
 ```
 
 The lgraph model is Apache-2.0 per the Vosk catalog; its URL, hash, size, and
-product inclusion rule are recorded in `provenance/SOURCES.lock`. The larger
-profile currently changes recognition only; the
-aosp_rpi5_car_lgraph_kokoro and aosp_rpi5_car_16gb products also include
-the Kokoro neural TTS engine. The compact product keeps eSpeak as its default.
+product inclusion rule are recorded in `provenance/SOURCES.lock`. The
+`aosp_rpi5_car_lgraph_kokoro`, `aosp_rpi5_car_zipformer_kokoro`, and
+`aosp_rpi5_car_16gb` products include the Kokoro neural TTS engine. The compact
+and recognition-only products keep eSpeak as their default.
 
 The recognizer asks Vosk for five alternatives. Android receives the ordered
 N-best list, and the command router can select an actionable alternative when
@@ -75,15 +97,44 @@ selected model is loaded and prewarmed
 when the voice interaction service becomes ready, then retained for the app
 process instead of being reloaded for every push-to-talk session.
 
-### Spotify media search
+### Generic recognition context
 
-`play Eric Prydz Opus` is sent to Spotify with
-`MediaController.TransportControls.playFromSearch`. An already-active Spotify
-session is preferred; otherwise the assistant connects to Spotify's exported
-`MediaBrowserService` and obtains its session token without opening a phone UI.
-The assistant contains no Spotify SDK, credentials, or proprietary code. Voice
-recognition remains offline, while Spotify playback follows Spotify's own
-network and downloaded-content behavior.
+The assistant builds a bounded local context index without opening another
+app's private database. It uses Android's standard surfaces:
+
+* active `MediaSession` metadata;
+* up to 300 entries from each of four prioritized exported
+  `MediaBrowserService` catalogs, with only two browsers connected
+  concurrently;
+* granted `MediaStore` audio metadata;
+* assistant-visible place, media, contact, and app documents from the platform
+  `GlobalSearchSession` AppSearch API; and
+* locally learned arguments from successful commands.
+
+AppSearch documents remain available only when their owning app explicitly
+made them globally visible to this assistant/role. Unrelated document schema
+types are ignored. Private SQLite files are never scraped. Catalog and
+AppSearch changes are coalesced into one final hotword update, and foreground
+commands refresh only lightweight resolver metadata so native model loading
+cannot compete with recognition or TTS.
+
+The index feeds up to 1,024 normalized phrases to Zipformer's modified-beam
+hotword graph and also performs conservative post-ASR resolution. For example,
+the live Pi corrected `PLAY ERIC PRIDES OPUS` to the authoritative catalog
+value `Eric Prydz Opus`. There are no hard-coded artist, playlist, destination,
+or player names.
+
+### Generic media search
+
+`play …` is sent through
+`MediaController.TransportControls.playFromSearch`. The assistant scores all
+active sessions that advertise `ACTION_PLAY_FROM_SEARCH`, preferring the
+currently playing or paused app. If none exists, it tries at most four exported
+`MediaBrowserService` players sequentially, prioritizing active and non-system
+apps. The selected application's normal label is used in the spoken response.
+The assistant contains no player SDK, credentials, proprietary code, or
+package-specific catalog logic. Recognition remains offline; a selected
+streaming player's own network behavior is unchanged.
 
 The `aconfig/` directory contains the small Apache-2.0 Caramel release value
 set used by the device product to disable the Pi USB-ALSA enumeration race.
@@ -143,21 +194,29 @@ provenance/SOURCES.lock.
 Add this repository to the AOSP manifest at `vendor/radiosound/voiceassistant`,
 then add the packages through `caramel_voice.mk`. eSpeak is always included as
 the small fallback; Kokoro is included by products that set
-`CARAMEL_VOICE_TTS := kokoro`. The device overlay must set:
+`CARAMEL_VOICE_TTS := kokoro`. All products set the assistant package defaults:
 
 ```xml
 <string name="config_defaultAssistant" translatable="false">com.radiosound.caramelvoice</string>
 <string name="config_systemSpeechRecognizer" translatable="false">com.radiosound.caramelvoice</string>
-<string name="config_defaultOnDeviceSpeechRecognitionService" translatable="false">com.radiosound.caramelvoice/.VoskRecognitionService</string>
 ```
 
-The product build signs both prebuilts with the platform key and installs them
-under `/product/priv-app`. Caramel Voice requests
+The compact and lgraph products set
+`config_defaultOnDeviceSpeechRecognitionService` to `.VoskRecognitionService`;
+the Zipformer products apply a higher-priority product overlay selecting
+`.SherpaRecognitionService`. Caramel Voice also reads the same immutable
+`recognition.properties`, so the AAOS PTT session and Android's public
+on-device recognition API use the same backend.
+
+The product build signs the selected prebuilts with the platform key and
+installs them under `/product/priv-app`. Caramel Voice requests
 `android.permission.MEDIA_CONTENT_CONTROL`; the device product grants that
 signature-or-privileged permission in
 `/product/etc/permissions/privapp-permissions-rpi5.xml` on the same partition
-as the app. `RECORD_AUDIO` remains a user-controllable dangerous permission
-granted by the default-permissions policy.
+as the app. `RECORD_AUDIO` and `READ_MEDIA_AUDIO` remain user-controllable
+dangerous permissions granted by the default-permissions policy. The latter
+allows local MediaStore titles to improve recognition without bypassing app
+sandboxing.
 
 Because the eSpeak package is a system package in the product image, AOSP's
 `TtsEngines` fallback can select it when `tts_default_synth` is empty. A
@@ -218,7 +277,7 @@ adb -s 192.168.1.56:5555 shell cmd role get-role-holders \
   android.app.role.ASSISTANT --user 10
 adb -s 192.168.1.56:5555 shell dumpsys package \
   com.radiosound.caramelvoice | grep -A 12 'install permissions:'
-adb -s 192.168.1.56:5555 logcat -d -s CaramelVoice Vosk TextToSpeech
+adb -s 192.168.1.56:5555 logcat -d -s CaramelVoice TextToSpeech sherpa-onnx
 ```
 
 The AAOS push-to-talk path is CarInputService, not the generic Android input
@@ -231,9 +290,11 @@ adb -s 192.168.1.56:5555 shell cmd car_service inject-key -t 200 231
 
 For a product image, leave `tts_default_synth` unset to test the system-engine
 fallback. For a sideload-only test, run the explicit setting command above.
-A successful runtime test must show the eSpeak service in `dumpsys
-texttospeech`, the Vosk recognizer in the service query, an active assistant
-role holder, and a voice session after the AAOS PTT injection. Spoken output
+A successful runtime test must show the selected offline engine in `dumpsys
+texttospeech`, both bundled recognition services in the service query, an
+active assistant role holder, and a voice session after the AAOS PTT injection.
+The `CaramelVoice` log must report either `Vosk model ready` or `Zipformer model
+ready` according to the product configuration. Spoken output
 also requires a real ALSA capture/playback device; `AudioRecord`/`AudioTrack`
 return `ENODEV` on a Pi with no sound card even though the service wiring is
 working. The Caramel product grants `RECORD_AUDIO` to the preinstalled
@@ -242,12 +303,36 @@ assistant on first boot; verify the effective grant before testing capture:
 ```sh
 adb -s 192.168.1.56:5555 shell cmd package check-permission \
   android.permission.RECORD_AUDIO com.radiosound.caramelvoice 10
+adb -s 192.168.1.56:5555 shell cmd package check-permission \
+  android.permission.READ_MEDIA_AUDIO com.radiosound.caramelvoice 10
 ```
 
 The expected result is `granted`. This is a normal dangerous-permission grant,
 not a privileged-permission bypass, so a user or policy can revoke it.
 
-## Reproducible host recognition check
+## Reproduce the Zipformer runtime and model
+
+The model fetch script downloads the original upstream 483 MiB release
+archive, verifies it before extraction, regenerates `bpe.vocab` with pinned
+SentencePiece 0.2.2, installs only the selected INT8 files, and verifies every
+output hash:
+
+```sh
+./scripts/fetch-zipformer-assets.sh
+```
+
+The AAR rebuild script accepts either the retained source archive or an exact
+checkout at the recorded v1.13.4 commit. It builds only arm64-v8a ASR/JNI,
+packages ONNX Runtime 1.27.0, and rejects an output whose hash differs from the
+checked prebuilt:
+
+```sh
+export ANDROID_HOME=/path/to/android-sdk
+./scripts/rebuild-sherpa-onnx-aar.sh \
+  provenance/sources/sherpa-onnx-v1.13.4-142807252687d81b40d6315f23470a1512a00de3.tar.gz
+```
+
+## Reproducible compact Vosk host check
 
 This checks the pinned model and the deterministic command phrase without
 requiring an audio device on the Pi. On macOS, create 16-bit mono 16 kHz WAV
@@ -277,7 +362,8 @@ PY
 
 The expected result contains `what time is it`. This host check is test-only;
 the Android build uses the checked-in Vosk AAR and model archive described in
-`provenance/SOURCES.lock`.
+`provenance/SOURCES.lock`. Zipformer is exercised through the Android unit and
+Pi device tests because the shipped runtime is the pinned arm64 Android AAR.
 
 If Android reports `SpeechRecognizer.ERROR_CLIENT` while a USB microphone is
 still appearing, the PTT session retries microphone startup three times at

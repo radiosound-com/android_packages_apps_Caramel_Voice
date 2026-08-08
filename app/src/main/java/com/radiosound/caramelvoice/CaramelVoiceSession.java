@@ -3,6 +3,8 @@ package com.radiosound.caramelvoice;
 import android.content.ComponentName;
 import android.content.Context;
 import android.content.Intent;
+import android.content.pm.ApplicationInfo;
+import android.content.pm.PackageManager;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
@@ -110,6 +112,7 @@ public final class CaramelVoiceSession extends VoiceInteractionSession {
         super.onShow(args, showFlags);
         sessionVisible = true;
         recognitionRouteRetries = 0;
+        RecognitionContextRepository.refreshForeground(context);
         updateStatus("Listening…");
         startRecognition();
     }
@@ -142,7 +145,10 @@ public final class CaramelVoiceSession extends VoiceInteractionSession {
             return;
         }
 
-        ComponentName service = new ComponentName(context, VoskRecognitionService.class);
+        Class<?> serviceClass = RecognitionBackendProfile.load().engine
+                == RecognitionBackendProfile.Engine.ZIPFORMER
+                ? SherpaRecognitionService.class : VoskRecognitionService.class;
+        ComponentName service = new ComponentName(context, serviceClass);
         recognizer = SpeechRecognizer.createSpeechRecognizer(context, service);
         recognizer.setRecognitionListener(new RecognitionListener() {
             @Override public void onReadyForSpeech(Bundle params) { updateStatus("Listening…"); }
@@ -176,6 +182,10 @@ public final class CaramelVoiceSession extends VoiceInteractionSession {
         request.putExtra(RecognizerIntent.EXTRA_LANGUAGE, "en-US");
         request.putExtra(RecognizerIntent.EXTRA_LANGUAGE_PREFERENCE, "en-US");
         request.putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true);
+        request.putExtra(RecognizerIntent.EXTRA_ENABLE_BIASING_DEVICE_CONTEXT, true);
+        request.putStringArrayListExtra(
+                RecognizerIntent.EXTRA_BIASING_STRINGS,
+                new ArrayList<>(RecognitionContextRepository.snapshot(context).hotwordPhrases()));
         request.putExtra(RecognizerIntent.EXTRA_CALLING_PACKAGE, context.getPackageName());
         recognizer.startListening(request);
     }
@@ -239,12 +249,17 @@ public final class CaramelVoiceSession extends VoiceInteractionSession {
                     : "OsmAnd is not installed.";
             Log.i(TAG, "NAVIGATE_HOME: " + phrase);
         } else if (command.type == VoiceCommandRouter.Type.NAVIGATE_TO) {
-            String destination = command.argument;
+            String destination = RecognitionContextRepository.snapshot(context).resolve(
+                    RecognitionEntity.Domain.NAVIGATION, command.argument);
             boolean launched = !destination.isEmpty() && launchOsmAndSearch(destination);
             response = launched
                     ? "Opening navigation for " + destination + "."
                     : "OsmAnd is not installed.";
             Log.i(TAG, "NAVIGATE_TO: " + destination);
+            if (launched) {
+                RecognitionContextRepository.recordSuccessful(
+                        context, RecognitionEntity.Domain.NAVIGATION, destination);
+            }
         } else if (command.type == VoiceCommandRouter.Type.OPEN_MAP) {
             response = launchOsmAnd(null)
                     ? "Opening the map."
@@ -262,32 +277,46 @@ public final class CaramelVoiceSession extends VoiceInteractionSession {
     }
 
     private void handleMediaCommand(VoiceCommandRouter.Command command) {
-        String query = command.argument;
+        String query = RecognitionContextRepository.snapshot(context).resolve(
+                RecognitionEntity.Domain.MEDIA, command.argument);
         if (query.isEmpty()) {
             updateStatus("Tell me what to play");
             speak("Tell me what to play");
             return;
         }
 
-        updateStatus("Searching Spotify for " + query + "…");
+        updateStatus("Searching your media apps for " + query + "…");
         Log.i(TAG, "MEDIA_COMMAND: " + command.phrase + " -> " + query);
         mediaController.playFromSearch(query, (result, playerPackage) -> {
             String response;
             if (result == MediaCommandController.Result.STARTED) {
-                String player = "com.spotify.music".equals(playerPackage)
-                        ? "Spotify"
-                        : "your media app";
+                String player = mediaPlayerLabel(playerPackage);
                 response = "Playing " + query + " on " + player + ".";
+                RecognitionContextRepository.recordSuccessful(
+                        context, RecognitionEntity.Domain.MEDIA, query);
             } else if (result == MediaCommandController.Result.PLAYER_NOT_FOUND) {
-                response = "Spotify is not installed.";
+                response = "No compatible media player is available.";
             } else {
-                response = "I could not start that in Spotify.";
+                response = "I could not start that in your media app.";
             }
             updateStatus(response);
             Log.i(TAG, "MEDIA_RESULT: " + query + " -> " + result
                     + " (" + playerPackage + ")");
             speak(response);
         });
+    }
+
+    private String mediaPlayerLabel(String packageName) {
+        if (packageName == null || packageName.isEmpty()) return "your media app";
+        PackageManager packageManager = context.getPackageManager();
+        try {
+            ApplicationInfo applicationInfo = packageManager.getApplicationInfo(packageName, 0);
+            String label = RecognitionEntity.cleanPhrase(
+                    packageManager.getApplicationLabel(applicationInfo).toString());
+            return label.isEmpty() ? "your media app" : label;
+        } catch (PackageManager.NameNotFoundException exception) {
+            return "your media app";
+        }
     }
 
     private boolean launchOsmAndSearch(String destination) {
