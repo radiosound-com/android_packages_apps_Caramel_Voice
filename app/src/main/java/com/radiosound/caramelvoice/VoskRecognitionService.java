@@ -17,7 +17,6 @@ import java.util.ArrayList;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicReference;
 
 public final class VoskRecognitionService extends RecognitionService {
     private static final String TAG = "CaramelVoice";
@@ -52,8 +51,8 @@ public final class VoskRecognitionService extends RecognitionService {
                 activeRecognizer = recognizer;
                 BufferedSpeechService service = new BufferedSpeechService(recognizer, 16000.0f);
                 speechService = service;
-                AtomicReference<ArrayList<String>> latestAlternatives =
-                        new AtomicReference<>(new ArrayList<>());
+                RecognitionSegmentAccumulator segments =
+                        new RecognitionSegmentAccumulator(MAX_ALTERNATIVES);
                 scheduleRecognitionTimeout(
                         service, listener, CAPTURE_WATCHDOG_MS, "capture");
                 if (!service.startListening(new BufferedSpeechService.Listener() {
@@ -70,18 +69,20 @@ public final class VoskRecognitionService extends RecognitionService {
 
                     @Override public void onPartialResult(String hypothesis) {
                         ArrayList<String> alternatives = textsFromJson(hypothesis);
-                        String text = alternatives.isEmpty() ? "" : alternatives.get(0);
+                        ArrayList<String> combined = segments.acceptPartialSegment(alternatives);
+                        String text = combined.isEmpty() ? "" : combined.get(0);
                         if (!text.isEmpty()) {
-                            latestAlternatives.set(alternatives);
                             sendPartial(listener, text);
                         }
                     }
 
                     @Override public void onResult(String hypothesis) {
                         ArrayList<String> alternatives = textsFromJson(hypothesis);
-                        String text = alternatives.isEmpty() ? "" : alternatives.get(0);
+                        ArrayList<String> combined =
+                                segments.acceptFinalizedSegment(alternatives);
+                        String text = combined.isEmpty() ? "" : combined.get(0);
                         if (!text.isEmpty()) {
-                            latestAlternatives.set(alternatives);
+                            Log.i(TAG, "Vosk finalized segments: " + combined);
                             sendPartial(listener, text);
                         }
                     }
@@ -89,8 +90,8 @@ public final class VoskRecognitionService extends RecognitionService {
                     @Override public void onFinalResult(String hypothesis) {
                         cancelRecognitionTimers();
                         closeSpeechService(service, recognizer);
-                        ArrayList<String> alternatives = textsFromJson(hypothesis);
-                        if (alternatives.isEmpty()) alternatives = latestAlternatives.get();
+                        ArrayList<String> alternatives =
+                                segments.finish(textsFromJson(hypothesis));
                         Log.i(TAG, "Vosk final alternatives: " + alternatives);
                         sendResult(listener, alternatives);
                     }
