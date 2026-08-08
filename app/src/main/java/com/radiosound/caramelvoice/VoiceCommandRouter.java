@@ -65,9 +65,9 @@ final class VoiceCommandRouter {
         }
 
         String navigateWithRecovery = recoverNavigationPrefix(normalized);
-        if (navigateWithRecovery.startsWith("navigate to ")) {
-            return new Command(Type.NAVIGATE_TO,
-                    navigateWithRecovery.substring("navigate to ".length()).trim(), original);
+        String destination = parseNavigationDestination(normalizeForParse(navigateWithRecovery));
+        if (destination != null && !destination.isEmpty()) {
+            return new Command(Type.NAVIGATE_TO, destination, original);
         }
 
         if (normalized.startsWith("open map") || normalized.equals("show map")
@@ -75,13 +75,9 @@ final class VoiceCommandRouter {
             return new Command(Type.OPEN_MAP, "", original);
         }
 
-        if (startsWithPlay(normalized)) {
-            int playIndex = normalized.startsWith("play") ? 4 : normalized.indexOf("play ");
-            if (playIndex >= 0 && playIndex + 1 < original.length()) {
-                return new Command(Type.PLAY,
-                        collapseWhitespace(original.substring(Math.min(playIndex + 1, original.length()))),
-                        original);
-            }
+        String playArgument = parsePlayArgument(normalizeForParse(normalized));
+        if (playArgument != null) {
+            return new Command(Type.PLAY, playArgument, original);
         }
 
         return new Command(Type.ECHO, "", original);
@@ -112,13 +108,49 @@ final class VoiceCommandRouter {
                 || normalized.equals("home");
     }
 
-    private static boolean startsWithPlay(String normalized) {
-        return normalized.equals("play") || normalized.startsWith("play ")
-                || normalized.startsWith("plays ")
-                || normalized.startsWith("play me ")
-                || normalized.startsWith("could you play ")
-                || normalized.startsWith("i want to play ")
-                || normalized.startsWith("please play ");
+    private static String parseNavigationDestination(String normalized) {
+        if (normalized.startsWith("navigate to ")) {
+            return collapseWhitespace(normalized.substring("navigate to ".length()));
+        }
+        if (normalized.startsWith("take me to ")) {
+            return collapseWhitespace(normalized.substring("take me to ".length()));
+        }
+        if (normalized.startsWith("go to ")) {
+            return collapseWhitespace(normalized.substring("go to ".length()));
+        }
+        return null;
+    }
+
+    private static String parsePlayArgument(String normalized) {
+        if (normalized.equals("play") || normalized.equals("plays")
+                || normalized.equals("play me") || normalized.equals("could you play")
+                || normalized.equals("i want to play") || normalized.equals("please play")) {
+            return "";
+        }
+        if (normalized.startsWith("play ")) {
+            return collapseWhitespace(normalized.substring("play ".length()));
+        }
+        if (normalized.startsWith("plays ")) {
+            return collapseWhitespace(normalized.substring("plays ".length()));
+        }
+        if (normalized.startsWith("play me ")) {
+            return collapseWhitespace(normalized.substring("play me ".length()));
+        }
+        if (normalized.startsWith("could you play ")) {
+            return collapseWhitespace(normalized.substring("could you play ".length()));
+        }
+        if (normalized.startsWith("i want to play ")) {
+            return collapseWhitespace(normalized.substring("i want to play ".length()));
+        }
+        if (normalized.startsWith("please play ")) {
+            return collapseWhitespace(normalized.substring("please play ".length()));
+        }
+        return null;
+    }
+
+    private static String normalizeForParse(String value) {
+        if (value == null) return "";
+        return collapseWhitespace(value);
     }
 
     private static String recoverNavigationPrefix(String normalized) {
@@ -135,7 +167,8 @@ final class VoiceCommandRouter {
         if (rebuilt.startsWith("navigate") && !rebuilt.startsWith("navigate to ")) {
             rebuilt = rebuilt.replaceFirst("navigate", "navigate to");
         }
-        if (rebuilt.startsWith("take me") && !rebuilt.startsWith("take me home")) {
+        if (rebuilt.startsWith("take me ") && !rebuilt.startsWith("take me home")
+                && !rebuilt.startsWith("take me to ")) {
             rebuilt = rebuilt.replaceFirst("take me", "navigate to");
         }
         return rebuilt;

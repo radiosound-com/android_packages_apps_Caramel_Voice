@@ -51,7 +51,7 @@ public final class VoiceCommandRouterTest {
         VoiceCommandRouter.Command command = VoiceCommandRouter.route("Please play Eric Prydz Opus");
 
         assertEquals(VoiceCommandRouter.Type.PLAY, command.type);
-        assertEquals("Eric Prydz Opus", command.argument);
+        assertEquals("eric prydz opus", command.argument);
     }
 
     @Test
@@ -68,7 +68,7 @@ public final class VoiceCommandRouterTest {
                 "  PLAY   Eric Prydz Opus  ");
 
         assertEquals(VoiceCommandRouter.Type.PLAY, command.type);
-        assertEquals("Eric Prydz Opus", command.argument);
+        assertEquals("eric prydz opus", command.argument);
     }
 
     @Test
@@ -79,7 +79,7 @@ public final class VoiceCommandRouterTest {
                 "play Eric Prince Opus"));
 
         assertEquals(VoiceCommandRouter.Type.PLAY, command.type);
-        assertEquals("Eric Prydz Opus", command.argument);
+        assertEquals("eric prydz opus", command.argument);
     }
 
     @Test
