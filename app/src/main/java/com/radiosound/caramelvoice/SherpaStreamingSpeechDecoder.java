@@ -22,13 +22,20 @@ final class SherpaStreamingSpeechDecoder implements StreamingSpeechDecoder {
     private final SherpaModelRepository.Lease lease;
     private final OnlineRecognizer recognizer;
     private OnlineStream stream;
+    private OnlineStream silentCompanion;
+    private OnlineStream[] decodeBatch;
     private float[] floatBuffer = new float[1600];
+    private float[] silenceBuffer = new float[1600];
 
     SherpaStreamingSpeechDecoder(SherpaModelRepository.Lease lease) {
         this.lease = lease;
         recognizer = lease.recognizer();
         stream = recognizer.createStream("");
-        stream.acceptWaveform(new float[LEFT_PADDING_SAMPLES], SAMPLE_RATE);
+        silentCompanion = recognizer.createStream("");
+        decodeBatch = new OnlineStream[] {stream, silentCompanion};
+        float[] leftPadding = new float[LEFT_PADDING_SAMPLES];
+        stream.acceptWaveform(leftPadding, SAMPLE_RATE);
+        silentCompanion.acceptWaveform(leftPadding, SAMPLE_RATE);
         decodeReady();
     }
 
@@ -40,15 +47,22 @@ final class SherpaStreamingSpeechDecoder implements StreamingSpeechDecoder {
         }
         float[] accepted = length == floatBuffer.length
                 ? floatBuffer : Arrays.copyOf(floatBuffer, length);
+        if (length > silenceBuffer.length) silenceBuffer = new float[length];
+        float[] silence = length == silenceBuffer.length
+                ? silenceBuffer : Arrays.copyOf(silenceBuffer, length);
         stream.acceptWaveform(accepted, SAMPLE_RATE);
+        silentCompanion.acceptWaveform(silence, SAMPLE_RATE);
         decodeReady();
         return new Result(json("partial", recognizer.getResult(stream)), false);
     }
 
     @Override
     public String finish() {
-        stream.acceptWaveform(new float[TAIL_PADDING_SAMPLES], SAMPLE_RATE);
+        float[] tailPadding = new float[TAIL_PADDING_SAMPLES];
+        stream.acceptWaveform(tailPadding, SAMPLE_RATE);
+        silentCompanion.acceptWaveform(tailPadding, SAMPLE_RATE);
         stream.inputFinished();
+        silentCompanion.inputFinished();
         decodeReady();
         return json("text", recognizer.getResult(stream));
     }
@@ -58,11 +72,23 @@ final class SherpaStreamingSpeechDecoder implements StreamingSpeechDecoder {
         OnlineStream ownedStream = stream;
         stream = null;
         if (ownedStream != null) ownedStream.release();
+        OnlineStream ownedSilentCompanion = silentCompanion;
+        silentCompanion = null;
+        decodeBatch = null;
+        if (ownedSilentCompanion != null) ownedSilentCompanion.release();
         lease.close();
     }
 
     private void decodeReady() {
-        while (recognizer.isReady(stream)) recognizer.decode(stream);
+        // sherpa-onnx v1.13.4 already has a native multi-stream decoder, but
+        // the Kotlin API did not expose it.  The INT8 Zipformer export is
+        // stable when its encoder sees a batch dimension > 1; pairing the
+        // live stream with silence preserves that behavior without a second
+        // recognizer or any user-visible audio.
+        while (stream != null && silentCompanion != null
+                && recognizer.isReady(stream) && recognizer.isReady(silentCompanion)) {
+            recognizer.decodeStreams(decodeBatch);
+        }
     }
 
     private static String json(String textKey, OnlineRecognizerResult result) {

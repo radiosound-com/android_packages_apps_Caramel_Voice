@@ -1,5 +1,5 @@
 # Caramel Vanilla offline voice stack provenance
-# SHA-256 values were recorded on 2026-08-06 and 2026-08-07.
+# SHA-256 values were recorded on 2026-08-06 through 2026-08-08.
 
 ## Caramel source
 
@@ -62,17 +62,30 @@
   `provenance/sources/sherpa-onnx-v1.13.4-142807252687d81b40d6315f23470a1512a00de3.tar.gz`
 * Source archive SHA-256:
   `11d1be9ab4a0c67d5cb238ca554522752c5e981173f91d42ddcda1b79b260c38`
+* Caramel patch:
+  `provenance/patches/sherpa-onnx-online-batch-decode.patch`
+* Caramel patch SHA-256:
+  `6611a24b8f6921749730ef2e18e243c7ffffcbdd60c5394f95a9ea3f134bbbeb`
+* Reproducible-build patch:
+  `provenance/patches/sherpa-onnx-reproducible-build-paths.patch`
+* Reproducible-build patch SHA-256:
+  `bc8f969b51253b7bf81fc49c3d6ec6231a453952f8d7528b60e67d271ea102c2`
 * Android AAR: `app/libs/sherpa-onnx-1.13.4-arm64-v8a.aar`
 * Android AAR SHA-256:
-  `395d364c83eec7572834c204812570d664987dae712c211c4ef1a8738e96463f`
+  `cb548bf2e4c297916d92d78a2f68255ff62e9cbb80de7adff8deedbf6ce95a93`
 * License: Apache-2.0; notice in `../LICENSES/Apache-2.0.txt` and source
   archive.
 * ONNX Runtime: 1.27.0, MIT; `libonnxruntime.so` is included in the AAR and
   the notice is in `../LICENSES/MIT.txt`.
 * Build environment: Android NDK `27.2.12479018`, Android platform 28,
   arm64-v8a, shared ONNX Runtime, JNI enabled, TTS and speaker diarization
-  disabled. `../scripts/rebuild-sherpa-onnx-aar.sh` rebuilds the checked AAR
-  from either the pinned archive or an exact git checkout.
+  disabled, command-line binaries disabled, and the native build defaults to a
+  single worker. `../scripts/rebuild-sherpa-onnx-aar.sh` applies the pinned
+  Caramel Kotlin-wrapper and reproducible-build patches and rebuilds the
+  checked AAR from either the pinned archive or an exact git checkout. The
+  wrapper patch exposes sherpa's existing native multi-stream decoder; the
+  assistant uses it with a silent companion stream because this Zipformer
+  export is unstable when decoded as a singleton batch.
 
 ## Kotlin runtime for the sherpa Java API
 
@@ -165,7 +178,7 @@
 ## Built prebuilts
 
 * `app/prebuilts/CaramelVoiceAssistant-0.3.0.apk`
-  SHA-256: `a5f48f9ab1925e1f98eb95b042ef045f90bf7acbf3ba81857d1620b216a4ae`
+  SHA-256: `56ee0b6f360557aa964b81438dcef96632fa8d5b880e03212af7e93cac2eebd6`
 * `app/prebuilts/CaramelEspeakTts-1.52.0.apk`
   SHA-256: `81e9e3c4761536f424bd37fcd86bef9ee71c3eb5cf0349509b51a395b1b83ebe`
 * `app/prebuilts/SherpaKokoroTts-1.13.4.apk`

@@ -1,0 +1,15 @@
+diff --git a/build-android-arm64-v8a.sh b/build-android-arm64-v8a.sh
+--- a/build-android-arm64-v8a.sh
++++ b/build-android-arm64-v8a.sh
+@@ -172,4 +172,6 @@
+ cmake -DCMAKE_TOOLCHAIN_FILE="$ANDROID_NDK/build/cmake/android.toolchain.cmake" \
++    -DCMAKE_C_FLAGS="$CFLAGS" \
++    -DCMAKE_CXX_FLAGS="$CXXFLAGS" \
+     -DSHERPA_ONNX_ENABLE_TTS=$SHERPA_ONNX_ENABLE_TTS \
+     -DSHERPA_ONNX_ENABLE_SPEAKER_DIARIZATION=$SHERPA_ONNX_ENABLE_SPEAKER_DIARIZATION \
+     -DSHERPA_ONNX_ENABLE_BINARY=$SHERPA_ONNX_ENABLE_BINARY \
+@@ -200,3 +200,3 @@
+ # make VERBOSE=1 -j4
+-make -j4
++make -j${SHERPA_ONNX_BUILD_JOBS:-1}
+ make install/strip

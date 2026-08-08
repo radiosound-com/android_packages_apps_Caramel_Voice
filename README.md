@@ -18,6 +18,14 @@ Vanilla on AOSP 16 / AAOS:
   files under `/product/etc/caramel_voice/models/`; it is never downloaded at
   runtime and remains responsive on the 4 GB Pi.
 
+The Android Zipformer decoder uses sherpa-onnx's native multi-stream decode
+entry point. Version 1.13.4 exposes that entry point through JNI but omits it
+from the Kotlin wrapper, so the checked-in AAR carries the small, reproducible
+wrapper patch recorded in `provenance/SOURCES.lock`. The assistant feeds one
+live stream plus a silent companion stream and decodes them as a batch; this
+works around a singleton-batch failure observed with this INT8 export without
+duplicating microphone audio or adding a second recognizer.
+
 The command layer currently handles time, opening OsmAnd, Android `geo:` map
 search/navigation phrases, and `play …` searches through standard Android
 media sessions and media browsers. It checks the common
@@ -87,16 +95,17 @@ Products can select the backend directly with:
 CARAMEL_VOICE_ASR_MODEL := zipformer-int8
 ```
 
-On the 4 GB Pi 5, the selected INT8 Zipformer loaded in about 1.3--1.7 seconds,
-held the assistant near 395 MiB RSS, and decoded the twelve-command recorded
-corpus in 7.66 seconds total (including a 1.73-second process/model load). A
-context-biased `Play Eric Prydz Opus` three-utterance run completed in 2.95
-seconds including model load and recognized all three exactly. On 16 GB boards,
-the higher-memory profile keeps those assets and increases beam/thread budget for
-better recovery on longer commands and music-heavy requests. The equivalent
-Whisper.cpp `small.en-q5_1` evaluation was accurate but ran at 0.98 real-time
-factor, so Whisper is reserved for a future optional second pass rather than
-the push-to-talk primary on a 4 GB board.
+On the 4 GB Pi 5, the selected INT8 Zipformer loaded in about 1.3--1.7 seconds
+and held the assistant near 395 MiB RSS in the earlier device measurements.
+The batched wrapper fix is required for those measurements to represent the
+real Android path; a singleton decode can return empty or nonsensical text even
+with the official model files. The larger Vosk lgraph remains available as the
+robustness-oriented 4 GB alternative, especially for far-field or noisy
+microphones. On 16 GB boards, the higher-memory profile keeps the same model
+family and increases beam/thread budget for longer commands and music-heavy
+requests. The equivalent Whisper.cpp `small.en-q5_1` evaluation was accurate
+but ran at 0.98 real-time factor, so Whisper is reserved for a future optional
+second pass rather than the push-to-talk primary on a 4 GB board.
 
 Selected larger models are copied only to
 `/product/etc/caramel_voice/models/`. Vosk lgraph is extracted lazily into the
@@ -354,15 +363,22 @@ output hash:
 ```
 
 The AAR rebuild script accepts either the retained source archive or an exact
-checkout at the recorded v1.13.4 commit. It builds only arm64-v8a ASR/JNI,
-packages ONNX Runtime 1.27.0, and rejects an output whose hash differs from the
-checked prebuilt:
+checkout at the recorded v1.13.4 commit. It applies the recorded Kotlin API
+patch, builds only arm64-v8a ASR/JNI, packages ONNX Runtime 1.27.0, and rejects
+an output whose hash differs from the checked prebuilt:
 
 ```sh
 export ANDROID_HOME=/path/to/android-sdk
 ./scripts/rebuild-sherpa-onnx-aar.sh \
   provenance/sources/sherpa-onnx-v1.13.4-142807252687d81b40d6315f23470a1512a00de3.tar.gz
 ```
+
+The script also applies the recorded reproducible-build patch. It canonicalizes
+macOS physical checkout paths, removes the unused command-line binary targets,
+and defaults the native build to one worker (`SHERPA_ONNX_BUILD_JOBS` can be
+overridden for non-reproducibility experiments). Two clean builds of the
+checked source/archive produced the same AAR hash recorded in
+`provenance/SOURCES.lock`.
 
 ## Reproducible compact Vosk host check
 

@@ -1,0 +1,25 @@
+diff --git a/sherpa-onnx/kotlin-api/OnlineRecognizer.kt b/sherpa-onnx/kotlin-api/OnlineRecognizer.kt
+--- a/sherpa-onnx/kotlin-api/OnlineRecognizer.kt
++++ b/sherpa-onnx/kotlin-api/OnlineRecognizer.kt
+@@ -119,5 +119,13 @@
+     fun reset(stream: OnlineStream) = reset(ptr, stream.ptr)
+     fun decode(stream: OnlineStream) = decode(ptr, stream.ptr)
++    /**
++     * Decode a batch of streams in one encoder call.  This is also useful for
++     * a single live stream paired with a silent companion stream: some
++     * streaming Zipformer exports are only stable when the encoder receives a
++     * batch dimension greater than one.
++     */
++    fun decodeStreams(streams: Array<OnlineStream>) =
++        decodeStreams(ptr, LongArray(streams.size) { streams[it].ptr })
+     fun isEndpoint(stream: OnlineStream) = isEndpoint(ptr, stream.ptr)
+     fun isReady(stream: OnlineStream) = isReady(ptr, stream.ptr)
+     fun getResult(stream: OnlineStream): OnlineRecognizerResult {
+@@ -138,6 +146,7 @@
+     private external fun createStream(ptr: Long, hotwords: String): Long
+     private external fun reset(ptr: Long, streamPtr: Long)
+     private external fun decode(ptr: Long, streamPtr: Long)
++    private external fun decodeStreams(ptr: Long, streamPtrs: LongArray)
+     private external fun isEndpoint(ptr: Long, streamPtr: Long): Boolean
+     private external fun isReady(ptr: Long, streamPtr: Long): Boolean
+     private external fun getResult(ptr: Long, streamPtr: Long): OnlineRecognizerResult
