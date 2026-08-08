@@ -24,6 +24,22 @@ public final class VoiceCommandRouterTest {
     }
 
     @Test
+    public void extractsHomeShortcutFromTakeMeHomeCommand() {
+        VoiceCommandRouter.Command command = VoiceCommandRouter.route("take me home");
+
+        assertEquals(VoiceCommandRouter.Type.NAVIGATE_HOME, command.type);
+        assertEquals("home", command.argument);
+    }
+
+    @Test
+    public void extractsPlaylistStyleMediaQuery() {
+        VoiceCommandRouter.Command command = VoiceCommandRouter.route("play playlist 2025");
+
+        assertEquals(VoiceCommandRouter.Type.PLAY, command.type);
+        assertEquals("playlist 2025", command.argument);
+    }
+
+    @Test
     public void extractsMediaSearchWhilePreservingProperNames() {
         VoiceCommandRouter.Command command = VoiceCommandRouter.route(
                 "  PLAY   Eric Prydz Opus  ");
