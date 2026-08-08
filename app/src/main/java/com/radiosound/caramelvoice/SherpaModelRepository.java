@@ -57,11 +57,13 @@ final class SherpaModelRepository {
             applicationContext = app;
         }
 
-        RecognitionContextRepository.preload(app);
-        RecognitionContextRepository.addChangeListener(SherpaModelRepository::contextChanged);
         // Make a usable built-in model available quickly. Context collectors continue in the
         // background and coalesce into the debounced full hotword graph afterward.
         scheduleInitialReload(INITIAL_LOAD_DELAY_MS);
+        // Register the collectors only after the bootstrap timer exists. A very fast collector
+        // must mark a deferred reload, not replace the initial timer with the long debounce.
+        RecognitionContextRepository.preload(app);
+        RecognitionContextRepository.addChangeListener(SherpaModelRepository::contextChanged);
     }
 
     static Lease acquire(Context context, long timeout, TimeUnit unit) throws InterruptedException {
