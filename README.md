@@ -47,11 +47,15 @@ The default `aosp_rpi5_car-caramel-userdebug` product uses the compact
 `aosp_rpi5_car_lgraph-caramel-userdebug` product retains Vosk's
 `vosk-model-en-us-0.22-lgraph` as a compatibility profile.
 
-The recommended high-quality 4 GB profiles are
+The recommended high-quality 4 GB profile set is
 `aosp_rpi5_car_zipformer-caramel-userdebug` and
 `aosp_rpi5_car_zipformer_kokoro-caramel-userdebug`; the latter also selects the
-neural Kokoro voice. The 16 GB product currently uses that same validated
-Zipformer/Kokoro pair. Products can select the backend directly with:
+neural Kokoro voice. For 16 GB builds, use:
+
+* `CARAMEL_VOICE_ASR_MODEL := zipformer-int8-highmem` (same Zipformer INT8
+  assets, increased threading and beam budget).
+
+Products can select the backend directly with:
 
 ```make
 CARAMEL_VOICE_ASR_MODEL := zipformer-int8
@@ -61,7 +65,9 @@ On the 4 GB Pi 5, the selected INT8 Zipformer loaded in about 1.3--1.7 seconds,
 held the assistant near 395 MiB RSS, and decoded the twelve-command recorded
 corpus in 7.66 seconds total (including a 1.73-second process/model load). A
 context-biased `Play Eric Prydz Opus` three-utterance run completed in 2.95
-seconds including model load and recognized all three exactly. The equivalent
+seconds including model load and recognized all three exactly. On 16 GB boards,
+the higher-memory profile keeps those assets and increases beam/thread budget for
+better recovery on longer commands and music-heavy requests. The equivalent
 Whisper.cpp `small.en-q5_1` evaluation was accurate but ran at 0.98 real-time
 factor, so Whisper is reserved for a future optional second pass rather than
 the push-to-talk primary on a 4 GB board.

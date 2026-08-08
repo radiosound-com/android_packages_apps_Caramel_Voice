@@ -13,8 +13,10 @@ else ifeq ($(CARAMEL_VOICE_ASR_MODEL),lgraph)
 CARAMEL_VOICE_RECOGNITION_CONFIG := recognition-lgraph.properties
 else ifeq ($(CARAMEL_VOICE_ASR_MODEL),zipformer-int8)
 CARAMEL_VOICE_RECOGNITION_CONFIG := recognition-zipformer-int8.properties
+else ifeq ($(CARAMEL_VOICE_ASR_MODEL),zipformer-int8-highmem)
+CARAMEL_VOICE_RECOGNITION_CONFIG := recognition-zipformer-int8-highmem.properties
 else
-$(error Unsupported CARAMEL_VOICE_ASR_MODEL '$(CARAMEL_VOICE_ASR_MODEL)'; use small, lgraph, or zipformer-int8)
+$(error Unsupported CARAMEL_VOICE_ASR_MODEL '$(CARAMEL_VOICE_ASR_MODEL)'; use small, lgraph, zipformer-int8, or zipformer-int8-highmem)
 endif
 
 CARAMEL_VOICE_TTS ?= espeak
@@ -59,7 +61,7 @@ PRODUCT_COPY_FILES += \
     vendor/radiosound/voiceassistant/app/model/vosk-model-en-us-0.22-lgraph.zip:$(TARGET_COPY_OUT_PRODUCT)/etc/caramel_voice/models/vosk-model-en-us-0.22-lgraph.zip
 endif
 
-ifeq ($(CARAMEL_VOICE_ASR_MODEL),zipformer-int8)
+ifneq ($(filter zipformer-int8 zipformer-int8-highmem,$(CARAMEL_VOICE_ASR_MODEL)),)
 CARAMEL_ZIPFORMER_MODEL_DIR := sherpa-onnx-streaming-zipformer-en-2023-06-21
 PRODUCT_COPY_FILES += \
     vendor/radiosound/voiceassistant/app/model/$(CARAMEL_ZIPFORMER_MODEL_DIR)/encoder-epoch-99-avg-1.int8.onnx:$(TARGET_COPY_OUT_PRODUCT)/etc/caramel_voice/models/$(CARAMEL_ZIPFORMER_MODEL_DIR)/encoder-epoch-99-avg-1.int8.onnx \
