@@ -92,7 +92,10 @@ and recognition-only products keep eSpeak as their default.
 The recognizer asks Vosk for five alternatives. Android receives the ordered
 N-best list, and the command router can select an actionable alternative when
 the first hypothesis contains a near-homophone such as `plate` instead of
-`play`. A dedicated thread continuously drains 100 ms chunks from a two-second
+`play`. Vosk segment-level hypotheses are stitched across partial/final boundaries
+before final ranking so long commands like `play Eric Prydz Opus` stay coherent
+through multiple decoder passes. A dedicated thread continuously drains 100 ms
+chunks from a two-second
 `AudioRecord` ring while a second thread performs Vosk decoding. The queue is
 bounded by source-side voice activity detection and prevents cold lgraph work
 from overflowing the microphone path. The detector keeps 300 ms of pre-roll,

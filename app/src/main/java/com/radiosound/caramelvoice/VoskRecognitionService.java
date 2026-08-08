@@ -26,6 +26,7 @@ public final class VoskRecognitionService extends RecognitionService {
     private final Handler mainHandler = new Handler(Looper.getMainLooper());
     private volatile BufferedSpeechService speechService;
     private volatile CloseOnce<Recognizer> activeRecognizer;
+    private volatile RecognitionSegmentAccumulator segmentAccumulator;
     private volatile Runnable recognitionTimeout;
 
     @Override
@@ -49,6 +50,7 @@ public final class VoskRecognitionService extends RecognitionService {
                 recognizer.setMaxAlternatives(MAX_ALTERNATIVES);
                 recognizerOwner = new CloseOnce<>(recognizer);
                 activeRecognizer = recognizerOwner;
+                segmentAccumulator = new RecognitionSegmentAccumulator(MAX_ALTERNATIVES);
                 CloseOnce<Recognizer> sessionRecognizer = recognizerOwner;
                 BufferedSpeechService service = new BufferedSpeechService(
                         new VoskStreamingSpeechDecoder(recognizer), 16000.0f);
@@ -72,9 +74,12 @@ public final class VoskRecognitionService extends RecognitionService {
                     @Override public void onPartialResult(String hypothesis) {
                         ArrayList<String> alternatives =
                                 RecognitionResultParser.textsFromJson(hypothesis);
-                        String text = alternatives.isEmpty() ? "" : alternatives.get(0);
+                        ArrayList<String> combined = segmentAccumulator == null
+                                ? alternatives
+                                : segmentAccumulator.acceptPartialSegment(alternatives);
+                        String text = combined.isEmpty() ? "" : combined.get(0);
                         if (!text.isEmpty()) {
-                            latestAlternatives.set(alternatives);
+                            latestAlternatives.set(combined);
                             sendPartial(listener, text);
                         }
                     }
@@ -82,9 +87,12 @@ public final class VoskRecognitionService extends RecognitionService {
                     @Override public void onResult(String hypothesis) {
                         ArrayList<String> alternatives =
                                 RecognitionResultParser.textsFromJson(hypothesis);
-                        String text = alternatives.isEmpty() ? "" : alternatives.get(0);
+                        ArrayList<String> combined = segmentAccumulator == null
+                                ? alternatives
+                                : segmentAccumulator.acceptFinalizedSegment(alternatives);
+                        String text = combined.isEmpty() ? "" : combined.get(0);
                         if (!text.isEmpty()) {
-                            latestAlternatives.set(alternatives);
+                            latestAlternatives.set(combined);
                             sendPartial(listener, text);
                         }
                     }
@@ -94,6 +102,10 @@ public final class VoskRecognitionService extends RecognitionService {
                         closeSpeechService(service, sessionRecognizer);
                         ArrayList<String> alternatives =
                                 RecognitionResultParser.textsFromJson(hypothesis);
+                        if (segmentAccumulator != null) {
+                            alternatives = segmentAccumulator.finish(alternatives);
+                            segmentAccumulator = null;
+                        }
                         if (alternatives.isEmpty()) alternatives = latestAlternatives.get();
                         Log.i(TAG, "Vosk final alternatives: " + alternatives);
                         sendResult(listener, alternatives);
@@ -121,6 +133,7 @@ public final class VoskRecognitionService extends RecognitionService {
                 Log.e(TAG, "Unable to start Vosk recognizer", exception);
                 if (activeRecognizer == recognizerOwner) activeRecognizer = null;
                 closeRecognizer(recognizerOwner);
+                segmentAccumulator = null;
                 reportError(listener, SpeechRecognizer.ERROR_CLIENT);
             }
         });
@@ -172,6 +185,7 @@ public final class VoskRecognitionService extends RecognitionService {
     private void closeSpeechService(
             BufferedSpeechService service, CloseOnce<Recognizer> recognizerOwner) {
         if (service == null) return;
+        segmentAccumulator = null;
         if (speechService == service) speechService = null;
         try {
             service.cancel();
