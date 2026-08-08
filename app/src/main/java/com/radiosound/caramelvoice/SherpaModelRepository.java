@@ -27,6 +27,7 @@ import java.util.concurrent.TimeUnit;
 final class SherpaModelRepository {
     private static final String TAG = "CaramelVoice";
     private static final int MAX_MODEL_HOTWORDS = 1024;
+    private static final long INITIAL_LOAD_DELAY_MS = 250;
     private static final long CONTEXT_DEBOUNCE_MS = 2500;
     private static final Object LOCK = new Object();
     private static final ScheduledExecutorService LOADER =
@@ -57,7 +58,9 @@ final class SherpaModelRepository {
 
         RecognitionContextRepository.preload(app);
         RecognitionContextRepository.addChangeListener(SherpaModelRepository::contextChanged);
-        scheduleReload(CONTEXT_DEBOUNCE_MS);
+        // Make a usable built-in model available quickly. Context collectors continue in the
+        // background and coalesce into the debounced full hotword graph afterward.
+        scheduleReload(INITIAL_LOAD_DELAY_MS);
     }
 
     static Lease acquire(Context context, long timeout, TimeUnit unit) throws InterruptedException {
