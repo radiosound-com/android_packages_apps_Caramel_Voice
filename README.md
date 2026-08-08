@@ -40,6 +40,28 @@ tests cover command normalization, time-query substitutions, navigation and
 media-query extraction, N-best command selection, context resolution, backend
 selection, and one-time native resource ownership.
 
+### API 36 arm64 AVD smoke test
+
+The standalone API 36 Google Play arm64 AVD cannot be remounted, so it is not
+a substitute for a Caramel AOSP product image. A debuggable assistant APK has
+an explicitly opt-in test path that reads `recognition.properties` and the
+Zipformer files from its own external-files directory; release APKs and all
+AOSP product builds continue to use the immutable `/product` paths. This lets
+the exact arm64 AAR and model be exercised on Apple Silicon without granting
+the emulator root access:
+
+```sh
+ANDROID_HOME=/path/to/android-sdk ./scripts/avd-smoke-test.sh
+```
+
+The script installs the debug assistant and a signed test copy of eSpeak,
+grants only the two runtime permissions needed for local testing, binds the
+assistant role, verifies Vosk prewarming, copies the checked-in INT8 Zipformer
+files, reboots, and verifies Zipformer's model startup. It does not claim
+microphone or CarInputService validation; those require an Android 16 Caramel
+product AVD or the physical Pi. Set `CARAMEL_AVD_SKIP_ZIPFORMER=1` to run only
+the compact profile check.
+
 ### Recognition model profiles
 
 The default `aosp_rpi5_car-caramel-userdebug` product uses the compact

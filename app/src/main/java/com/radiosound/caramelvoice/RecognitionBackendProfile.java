@@ -5,6 +5,9 @@
 
 package com.radiosound.caramelvoice;
 
+import android.content.Context;
+import android.content.pm.ApplicationInfo;
+
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
@@ -39,8 +42,17 @@ final class RecognitionBackendProfile {
     }
 
     static RecognitionBackendProfile load() {
+        return load(null);
+    }
+
+    /**
+     * Loads the immutable product profile. A debuggable build may opt into an
+     * external profile for emulator/model smoke tests; release builds never
+     * consult app-writable storage for backend selection.
+     */
+    static RecognitionBackendProfile load(Context context) {
         Properties properties = new Properties();
-        File config = new File(CONFIG_PATH);
+        File config = configFile(context);
         if (config.isFile()) {
             try (FileInputStream input = new FileInputStream(config)) {
                 properties.load(input);
@@ -49,6 +61,22 @@ final class RecognitionBackendProfile {
             }
         }
         return fromProperties(properties);
+    }
+
+    private static File configFile(Context context) {
+        if (isDebuggable(context)) {
+            File external = context.getExternalFilesDir(null);
+            if (external != null) {
+                File override = new File(external, "recognition.properties");
+                if (override.isFile()) return override;
+            }
+        }
+        return new File(CONFIG_PATH);
+    }
+
+    private static boolean isDebuggable(Context context) {
+        return context != null
+                && (context.getApplicationInfo().flags & ApplicationInfo.FLAG_DEBUGGABLE) != 0;
     }
 
     static RecognitionBackendProfile fromProperties(Properties properties) {

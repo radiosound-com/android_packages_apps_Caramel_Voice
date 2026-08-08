@@ -13,7 +13,7 @@ public final class CaramelVoiceInteractionService extends VoiceInteractionServic
     public void onReady() {
         super.onReady();
         RecognitionContextRepository.preload(this);
-        if (RecognitionBackendProfile.load().engine
+        if (RecognitionBackendProfile.load(this).engine
                 == RecognitionBackendProfile.Engine.ZIPFORMER) {
             SherpaModelRepository.preload(this);
         } else {

@@ -48,7 +48,7 @@ final class SherpaModelRepository {
         Context app = context.getApplicationContext();
         synchronized (LOCK) {
             if (preloadStarted) return;
-            profile = RecognitionBackendProfile.load();
+            profile = RecognitionBackendProfile.load(app);
             if (profile.engine != RecognitionBackendProfile.Engine.ZIPFORMER) return;
             preloadStarted = true;
             applicationContext = app;
@@ -146,7 +146,7 @@ final class SherpaModelRepository {
     private static OnlineRecognizer build(
             Context context, RecognitionBackendProfile selectedProfile, String hotwords)
             throws IOException {
-        SherpaModelPaths paths = new SherpaModelPaths();
+        SherpaModelPaths paths = new SherpaModelPaths(context);
         paths.validate();
         File hotwordsFile = new File(context.getNoBackupFilesDir(), "zipformer-hotwords.txt");
         try (FileOutputStream output = new FileOutputStream(hotwordsFile, false)) {

@@ -145,7 +145,7 @@ public final class CaramelVoiceSession extends VoiceInteractionSession {
             return;
         }
 
-        Class<?> serviceClass = RecognitionBackendProfile.load().engine
+        Class<?> serviceClass = RecognitionBackendProfile.load(context).engine
                 == RecognitionBackendProfile.Engine.ZIPFORMER
                 ? SherpaRecognitionService.class : VoskRecognitionService.class;
         ComponentName service = new ComponentName(context, serviceClass);

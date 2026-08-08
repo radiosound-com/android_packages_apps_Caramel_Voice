@@ -164,6 +164,12 @@ final class RecognitionContextRepository {
 
     private static void refreshActiveMedia(Context context, boolean notifyModel) {
         ArrayList<RecognitionEntity> entities = new ArrayList<>();
+        if (context.checkSelfPermission(Manifest.permission.MEDIA_CONTENT_CONTROL)
+                != PackageManager.PERMISSION_GRANTED) {
+            publishSource("active-media", entities, notifyModel);
+            Log.i(TAG, "Active media context skipped: MEDIA_CONTENT_CONTROL is not granted");
+            return;
+        }
         MediaSessionManager manager = context.getSystemService(MediaSessionManager.class);
         if (manager == null) {
             publishSource("active-media", entities, notifyModel);
@@ -198,6 +204,11 @@ final class RecognitionContextRepository {
                 != PackageManager.PERMISSION_GRANTED) {
             publishSource("media-store", Collections.emptyList(), notifyModel);
             Log.i(TAG, "MediaStore context skipped: READ_MEDIA_AUDIO is not granted");
+            return;
+        }
+        if (MediaStore.getExternalVolumeNames(context).isEmpty()) {
+            publishSource("media-store", Collections.emptyList(), notifyModel);
+            Log.i(TAG, "MediaStore context skipped: no external media volume");
             return;
         }
 

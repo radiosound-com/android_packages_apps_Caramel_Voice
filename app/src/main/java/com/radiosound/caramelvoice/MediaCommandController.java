@@ -5,10 +5,12 @@
 
 package com.radiosound.caramelvoice;
 
+import android.Manifest;
 import android.content.ComponentName;
 import android.content.Context;
 import android.content.Intent;
 import android.content.pm.ApplicationInfo;
+import android.content.pm.PackageManager;
 import android.content.pm.ResolveInfo;
 import android.media.browse.MediaBrowser;
 import android.media.session.MediaController;
@@ -83,6 +85,10 @@ final class MediaCommandController {
     }
 
     private MediaController findSearchController() {
+        if (context.checkSelfPermission(Manifest.permission.MEDIA_CONTENT_CONTROL)
+                != PackageManager.PERMISSION_GRANTED) {
+            return null;
+        }
         MediaSessionManager manager = context.getSystemService(MediaSessionManager.class);
         if (manager == null) return null;
         try {
@@ -183,6 +189,10 @@ final class MediaCommandController {
 
     private Set<String> activeMediaPackages() {
         HashSet<String> packages = new HashSet<>();
+        if (context.checkSelfPermission(Manifest.permission.MEDIA_CONTENT_CONTROL)
+                != PackageManager.PERMISSION_GRANTED) {
+            return packages;
+        }
         MediaSessionManager manager = context.getSystemService(MediaSessionManager.class);
         if (manager == null) return packages;
         try {
