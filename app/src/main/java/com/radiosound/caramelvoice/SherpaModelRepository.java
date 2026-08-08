@@ -31,6 +31,7 @@ final class SherpaModelRepository {
     private static final Object LOCK = new Object();
     private static final ScheduledExecutorService LOADER =
             Executors.newSingleThreadScheduledExecutor();
+    private static final RecognitionReadinessGate READINESS = new RecognitionReadinessGate();
 
     private static Context applicationContext;
     private static RecognitionBackendProfile profile;
@@ -77,6 +78,24 @@ final class SherpaModelRepository {
         }
     }
 
+    static void whenReady(Context context, RecognitionReadinessGate.Callback callback) {
+        preload(context);
+        boolean available;
+        synchronized (LOCK) {
+            available = recognizer != null;
+            if (!available && !loading && scheduledReload == null && preloadStarted) {
+                READINESS.reset();
+                scheduledReload = LOADER.schedule(
+                        SherpaModelRepository::reload, 0, TimeUnit.MILLISECONDS);
+            }
+        }
+        if (available) {
+            if (callback != null) callback.onReady(true);
+        } else {
+            READINESS.await(callback);
+        }
+    }
+
     private static void contextChanged() {
         scheduleReload(CONTEXT_DEBOUNCE_MS);
     }
@@ -116,6 +135,7 @@ final class SherpaModelRepository {
             oldRecognizer = recognizer;
             recognizer = null;
             loadedHotwords = null;
+            READINESS.reset();
         }
 
         if (oldRecognizer != null) oldRecognizer.release();
@@ -140,6 +160,7 @@ final class SherpaModelRepository {
             scheduleAgain = reloadPending;
             LOCK.notifyAll();
         }
+        READINESS.complete(loaded != null);
         if (scheduleAgain) scheduleReload(CONTEXT_DEBOUNCE_MS);
     }
 

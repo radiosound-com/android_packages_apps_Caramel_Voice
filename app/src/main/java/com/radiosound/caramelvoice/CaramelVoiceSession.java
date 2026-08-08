@@ -37,6 +37,7 @@ public final class CaramelVoiceSession extends VoiceInteractionSession {
     };
     private static final int MAX_RECOGNITION_ROUTE_RETRIES = 3;
     private static final long RECOGNITION_ROUTE_RETRY_DELAY_MS = 750;
+    private static final long MODEL_READY_TIMEOUT_MS = 30000;
 
     private final Context context;
     private final Handler mainHandler = new Handler(Looper.getMainLooper());
@@ -49,7 +50,9 @@ public final class CaramelVoiceSession extends VoiceInteractionSession {
     private String activeUtteranceId;
     private Runnable utteranceTimeout;
     private Runnable recognitionRetry;
+    private Runnable modelReadyTimeout;
     private int recognitionRouteRetries;
+    private int showGeneration;
     private boolean sessionVisible;
 
     CaramelVoiceSession(Context context) {
@@ -111,15 +114,38 @@ public final class CaramelVoiceSession extends VoiceInteractionSession {
     public void onShow(Bundle args, int showFlags) {
         super.onShow(args, showFlags);
         sessionVisible = true;
+        int generation = ++showGeneration;
         recognitionRouteRetries = 0;
         RecognitionContextRepository.refreshForeground(context);
-        updateStatus("Listening…");
-        startRecognition();
+        cancelModelReadyTimeout();
+        updateStatus("Preparing microphone…");
+        modelReadyTimeout = () -> {
+            if (!sessionVisible || generation != showGeneration) return;
+            modelReadyTimeout = null;
+            Log.w(TAG, "Recognition model did not become ready before timeout");
+            updateStatus("Offline recognition unavailable");
+            speak("Offline recognition is unavailable");
+        };
+        mainHandler.postDelayed(modelReadyTimeout, MODEL_READY_TIMEOUT_MS);
+        RecognitionModelReadiness.whenReady(context, available -> mainHandler.post(() -> {
+            if (!sessionVisible || generation != showGeneration) return;
+            cancelModelReadyTimeout();
+            if (!available) {
+                Log.w(TAG, "Recognition model is unavailable");
+                updateStatus("Offline recognition unavailable");
+                speak("Offline recognition is unavailable");
+                return;
+            }
+            updateStatus("Listening…");
+            startRecognition();
+        }));
     }
 
     @Override
     public void onHide() {
         sessionVisible = false;
+        showGeneration++;
+        cancelModelReadyTimeout();
         cancelRecognitionRetry();
         stopRecognition();
         super.onHide();
@@ -128,6 +154,8 @@ public final class CaramelVoiceSession extends VoiceInteractionSession {
     @Override
     public void onDestroy() {
         sessionVisible = false;
+        showGeneration++;
+        cancelModelReadyTimeout();
         cancelRecognitionRetry();
         stopRecognition();
         mediaController.close();
@@ -228,6 +256,13 @@ public final class CaramelVoiceSession extends VoiceInteractionSession {
         if (recognitionRetry != null) {
             mainHandler.removeCallbacks(recognitionRetry);
             recognitionRetry = null;
+        }
+    }
+
+    private void cancelModelReadyTimeout() {
+        if (modelReadyTimeout != null) {
+            mainHandler.removeCallbacks(modelReadyTimeout);
+            modelReadyTimeout = null;
         }
     }
 

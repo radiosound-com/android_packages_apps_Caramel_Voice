@@ -27,10 +27,11 @@ final class VoskModelRepository {
 
     private static final Object LOCK = new Object();
     private static final ExecutorService LOADER = Executors.newSingleThreadExecutor();
-    private static final CountDownLatch LOAD_COMPLETE = new CountDownLatch(1);
+    private static final RecognitionReadinessGate READINESS = new RecognitionReadinessGate();
 
     private static volatile boolean loadStarted;
     private static volatile Model model;
+    private static volatile CountDownLatch loadComplete = new CountDownLatch(1);
 
     private VoskModelRepository() {}
 
@@ -38,21 +39,36 @@ final class VoskModelRepository {
         synchronized (LOCK) {
             if (loadStarted) return;
             loadStarted = true;
+            loadComplete = new CountDownLatch(1);
+            READINESS.reset();
         }
 
         Context applicationContext = context.getApplicationContext();
         LOADER.execute(() -> load(applicationContext));
     }
 
+    static void whenReady(Context context, RecognitionReadinessGate.Callback callback) {
+        synchronized (LOCK) {
+            if (loadStarted && model == null && READINESS.isComplete()
+                    && !READINESS.isAvailable()) {
+                loadStarted = false;
+            }
+        }
+        preload(context);
+        READINESS.await(callback);
+    }
+
     static Model await(Context context, long timeout, TimeUnit unit)
             throws InterruptedException {
         preload(context);
-        if (!LOAD_COMPLETE.await(timeout, unit)) return null;
+        CountDownLatch currentLoad = loadComplete;
+        if (!currentLoad.await(timeout, unit)) return null;
         return model;
     }
 
     private static void load(Context context) {
         Model loadedModel = null;
+        boolean available = false;
         try {
             VoskModelProfile profile = VoskModelProfile.load();
             String modelPath = VoskModelStore.sync(context, profile);
@@ -60,14 +76,17 @@ final class VoskModelRepository {
             loadedModel = new Model(modelPath);
             prewarm(loadedModel);
             model = loadedModel;
+            available = true;
             Log.i(TAG, "Vosk model ready and prewarmed in "
                     + (SystemClock.elapsedRealtime() - startedAt) + " ms: "
                     + profile.modelDirectory + " at " + modelPath);
         } catch (IOException | RuntimeException exception) {
             Log.e(TAG, "Unable to load Vosk model", exception);
             if (loadedModel != null) loadedModel.close();
+            model = null;
         } finally {
-            LOAD_COMPLETE.countDown();
+            READINESS.complete(available);
+            loadComplete.countDown();
         }
     }
 
