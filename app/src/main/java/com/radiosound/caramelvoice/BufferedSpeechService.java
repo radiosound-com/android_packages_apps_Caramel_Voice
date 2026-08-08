@@ -129,10 +129,20 @@ final class BufferedSpeechService {
 
     /** Stop capture and let the decoder drain queued speech before finalizing. */
     boolean stop() {
+        Thread capture;
         synchronized (this) {
             if (captureThread == null && decoderThread == null) return false;
             stopRequested = true;
+            capture = captureThread;
         }
+
+        // AudioRecord.read() uses the blocking overload below.  A flag alone
+        // cannot wake a read when a USB/ALSA route has stopped producing
+        // frames; stop the recorder and interrupt the capture thread so the
+        // normal end-of-audio path can run and the decoder can drain what was
+        // already queued.
+        stopRecorder();
+        if (capture != null) capture.interrupt();
         return true;
     }
 
