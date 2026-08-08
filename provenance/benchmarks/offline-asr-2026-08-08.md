@@ -23,6 +23,12 @@ catalog metadata such as `Eric Prydz Opus` (see
 where the recording reference was `two one`; the command still retains the
 complete coordinate phrase and the existing navigation parser accepts it.
 
+On the running API 36 arm64 Caramel product AVD, the production assistant held
+363 context phrases at approximately 287 MiB PSS / 383 MiB RSS after the
+Zipformer model was warm. This is an emulator measurement, not a substitute
+for the missing 4 GB Pi device run, but it is consistent with the earlier Pi
+RSS measurements recorded in the README.
+
 Whisper was run with `whisper.cpp` 1.9.2 on an Apple M4 Max. The q5_1 model
 processed 39.76 seconds of audio in 24.47 seconds with CPU-only inference and
 reached a 626,556,928-byte peak resident set on the Mac. The earlier Pi
