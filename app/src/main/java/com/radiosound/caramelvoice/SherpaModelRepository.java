@@ -40,6 +40,7 @@ final class SherpaModelRepository {
     private static String loadedHotwords;
     private static ScheduledFuture<?> scheduledReload;
     private static boolean preloadStarted;
+    private static boolean initialLoadScheduled;
     private static boolean loading;
     private static boolean reloadPending;
     private static int activeLeases;
@@ -60,7 +61,7 @@ final class SherpaModelRepository {
         RecognitionContextRepository.addChangeListener(SherpaModelRepository::contextChanged);
         // Make a usable built-in model available quickly. Context collectors continue in the
         // background and coalesce into the debounced full hotword graph afterward.
-        scheduleReload(INITIAL_LOAD_DELAY_MS);
+        scheduleInitialReload(INITIAL_LOAD_DELAY_MS);
     }
 
     static Lease acquire(Context context, long timeout, TimeUnit unit) throws InterruptedException {
@@ -110,7 +111,28 @@ final class SherpaModelRepository {
                 reloadPending = true;
                 return;
             }
+            // Do not postpone the first usable model because a fast context collector completed
+            // while its bootstrap timer was pending. The bootstrap load will observe whatever
+            // context is available and the pending flag will schedule the complete graph later.
+            if (scheduledReload != null && initialLoadScheduled) {
+                reloadPending = true;
+                return;
+            }
             if (scheduledReload != null) scheduledReload.cancel(false);
+            scheduledReload = LOADER.schedule(
+                    SherpaModelRepository::reload, delayMs, TimeUnit.MILLISECONDS);
+        }
+    }
+
+    private static void scheduleInitialReload(long delayMs) {
+        synchronized (LOCK) {
+            if (!preloadStarted) return;
+            if (loading || activeLeases > 0) {
+                reloadPending = true;
+                return;
+            }
+            if (scheduledReload != null) return;
+            initialLoadScheduled = true;
             scheduledReload = LOADER.schedule(
                     SherpaModelRepository::reload, delayMs, TimeUnit.MILLISECONDS);
         }
@@ -123,6 +145,7 @@ final class SherpaModelRepository {
         OnlineRecognizer oldRecognizer;
         synchronized (LOCK) {
             scheduledReload = null;
+            initialLoadScheduled = false;
             if (loading || activeLeases > 0) {
                 reloadPending = true;
                 return;
