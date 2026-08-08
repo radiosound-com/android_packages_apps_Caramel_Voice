@@ -32,6 +32,29 @@ public final class VoiceCommandRouterTest {
     }
 
     @Test
+    public void recoversCommonNoisyNavigationPrefix() {
+        VoiceCommandRouter.Command command = VoiceCommandRouter.route("the gate to 38.21884 north");
+
+        assertEquals(VoiceCommandRouter.Type.NAVIGATE_TO, command.type);
+        assertEquals("38.21884 north", command.argument);
+    }
+
+    @Test
+    public void acceptsOpenMapVariants() {
+        VoiceCommandRouter.Command command = VoiceCommandRouter.route("map");
+
+        assertEquals(VoiceCommandRouter.Type.OPEN_MAP, command.type);
+    }
+
+    @Test
+    public void acceptsPlayRequestVariants() {
+        VoiceCommandRouter.Command command = VoiceCommandRouter.route("Please play Eric Prydz Opus");
+
+        assertEquals(VoiceCommandRouter.Type.PLAY, command.type);
+        assertEquals("Eric Prydz Opus", command.argument);
+    }
+
+    @Test
     public void extractsPlaylistStyleMediaQuery() {
         VoiceCommandRouter.Command command = VoiceCommandRouter.route("play playlist 2025");
 

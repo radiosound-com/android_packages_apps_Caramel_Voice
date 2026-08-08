@@ -36,6 +36,7 @@ final class RecognitionContextRepository {
     private static final String TAG = "CaramelVoice";
     private static final String LEARNED_PREFERENCES = "recognition_context";
     private static final int MAX_MEDIA_STORE_ENTITIES = 500;
+    private static final int MAX_PLAYLIST_ENTITIES = 120;
     private static final int MAX_LEARNED_ENTITIES_PER_DOMAIN = 64;
     private static final long MIN_REFRESH_INTERVAL_MS = 60_000;
 
@@ -236,6 +237,53 @@ final class RecognitionContextRepository {
         }
         publishSource("media-store", entities, notifyModel);
         Log.i(TAG, "Indexed " + entities.size() + " MediaStore audio entities");
+
+        refreshMediaStorePlaylists(context, entities, notifyModel);
+    }
+
+    private static void refreshMediaStorePlaylists(
+            Context context, List<RecognitionEntity> entities, boolean notifyModel) {
+        if (context.checkSelfPermission(Manifest.permission.READ_MEDIA_AUDIO)
+                != PackageManager.PERMISSION_GRANTED) {
+            return;
+        }
+
+        ArrayList<RecognitionEntity> playlistEntities = new ArrayList<>();
+        String[] projection = {
+                MediaStore.Audio.Playlists._ID,
+                MediaStore.Audio.Playlists.NAME
+        };
+        try (Cursor cursor = context.getContentResolver().query(
+                MediaStore.Audio.Playlists.EXTERNAL_CONTENT_URI,
+                projection,
+                null,
+                null,
+                MediaStore.Audio.Playlists._ID + " DESC")) {
+            if (cursor != null) {
+                int idColumn = cursor.getColumnIndexOrThrow(MediaStore.Audio.Playlists._ID);
+                int nameColumn = cursor.getColumnIndexOrThrow(MediaStore.Audio.Playlists.NAME);
+                while (cursor.moveToNext() && playlistEntities.size() < MAX_PLAYLIST_ENTITIES) {
+                    String name = text(cursor.getString(nameColumn));
+                    if (name.isEmpty()) continue;
+                    addMediaEntity(
+                            playlistEntities,
+                            "media-store:playlist:" + cursor.getLong(idColumn),
+                            "media-store",
+                            name,
+                            "",
+                            "",
+                            750 - playlistEntities.size());
+                }
+            }
+        } catch (RuntimeException exception) {
+            Log.w(TAG, "Unable to index MediaStore playlists", exception);
+        }
+
+        if (!playlistEntities.isEmpty()) {
+            entities.addAll(playlistEntities);
+            publishSource("media-store", entities, notifyModel);
+            Log.i(TAG, "Indexed " + playlistEntities.size() + " MediaStore playlists");
+        }
     }
 
     static void addMediaEntity(
