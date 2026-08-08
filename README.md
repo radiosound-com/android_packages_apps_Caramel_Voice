@@ -155,9 +155,13 @@ app's private database. It uses Android's standard surfaces:
 AppSearch documents remain available only when their owning app explicitly
 made them globally visible to this assistant/role. Unrelated document schema
 types are ignored. Private SQLite files are never scraped. Catalog and
-AppSearch changes are coalesced into one final hotword update, and foreground
-commands refresh only lightweight resolver metadata so native model loading
-cannot compete with recognition or TTS.
+AppSearch changes are coalesced into one final hotword update. A foreground PTT
+request also refreshes cheap learned and active-session metadata; Zipformer's
+model repository defers its hotword-graph reload while a capture lease is
+active, then applies it immediately after the command so model loading cannot
+compete with recognition or TTS. On a cold process start the session shows
+**Preparing microphone…** until the selected model is ready, preventing the
+first spoken words from being lost while native assets load.
 
 The index feeds up to 1,024 normalized phrases to Zipformer's modified-beam
 hotword graph and also performs conservative post-ASR resolution. For example,
