@@ -31,6 +31,12 @@ Zipformer model was warm. This is an emulator measurement, not a substitute
 for the missing 4 GB Pi device run, but it is consistent with the earlier Pi
 RSS measurements recorded in the README.
 
+The production Zipformer decoder was also replayed after applying the exact
+source-side VAD trimming and 100 ms chunking, with 300 ms, 500 ms, and 600 ms
+pre-roll variants. All twelve labeled commands remained correct in each case,
+so the current 300 ms pre-roll was retained for responsiveness; no VAD change
+was justified by this corpus.
+
 Whisper was run with `whisper.cpp` 1.9.2 on an Apple M4 Max. The q5_1 model
 processed 39.76 seconds of audio in 24.47 seconds with CPU-only inference and
 reached a 626,556,928-byte peak resident set on the Mac. The earlier Pi
