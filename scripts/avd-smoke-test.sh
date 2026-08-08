@@ -118,6 +118,19 @@ wait_for_log() {
 }
 
 remote_root=/sdcard/Android/data/com.radiosound.caramelvoice/files
+if [ "$user_id" != "0" ]; then
+    # /sdcard is user 0 on AAOS. The debug-only model override must be placed
+    # in the active user's media tree so Context#getExternalFilesDir() resolves
+    # to the same files for user 10 (or another driver user).
+    "$adb" -s "$serial" root >/dev/null 2>&1 || die \
+        "CARAMEL_AVD_USER=$user_id requires a debuggable AVD with adb root"
+    sleep 1
+    "$adb" -s "$serial" shell id | grep -q 'uid=0' || die \
+        "CARAMEL_AVD_USER=$user_id requires adb root for external model staging"
+    remote_root="/data/media/$user_id/Android/data/com.radiosound.caramelvoice/files"
+fi
+
+"$adb" -s "$serial" shell mkdir -p "$remote_root"
 # Start from the immutable compact default even when the AVD was used by a
 # previous run that left the debug-only Zipformer override in place.
 "$adb" -s "$serial" shell rm -f "$remote_root/recognition.properties"
@@ -161,6 +174,13 @@ if [ "$skip_zipformer" != "1" ]; then
         if [ "$attempt" = 90 ]; then die "AVD reboot did not complete"; fi
         sleep 1
     done
+    # AAOS user services may not rebind an already-held role after boot. Cycle
+    # the debug role so the VoiceInteractionService is started deterministically
+    # for the active user before waiting for model initialization.
+    "$adb" -s "$serial" shell cmd role remove-role-holder --user "$user_id" \
+        android.app.role.ASSISTANT com.radiosound.caramelvoice >/dev/null 2>&1 || true
+    "$adb" -s "$serial" shell cmd role add-role-holder --user "$user_id" \
+        android.app.role.ASSISTANT com.radiosound.caramelvoice >/dev/null
     wait_for_log 'Zipformer model ready in'
 fi
 
