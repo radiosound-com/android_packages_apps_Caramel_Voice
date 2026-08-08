@@ -87,7 +87,7 @@ The lgraph model is Apache-2.0 per the Vosk catalog; its URL, hash, size, and
 product inclusion rule are recorded in `provenance/SOURCES.lock`. The
 `aosp_rpi5_car_lgraph_kokoro`, `aosp_rpi5_car_zipformer_kokoro`, and
 `aosp_rpi5_car_16gb` products include the Kokoro neural TTS engine. The compact
-and recognition-only products keep eSpeak as their default.
+and Vosk-recognition products keep eSpeak as their default.
 
 The recognizer asks Vosk for five alternatives. Android receives the ordered
 N-best list, and the command router can select an actionable alternative when

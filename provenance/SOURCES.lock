@@ -37,9 +37,10 @@
   retained inside the archive.
 * SHA-256: `d9838b4aaa82a75c4a17f5aca300eaca129aaab2a7cbf951bafbb500eb9c4334`
 * Archive size: 125 MiB; unpacked size: approximately 204 MiB.
-* Product use: included by `aosp_rpi5_car_lgraph` and
-  `aosp_rpi5_car_lgraph_kokoro`; the compact, Zipformer, and 16 GB products do
-  not copy this archive into their images.
+* Product use: included by `aosp_rpi5_car_lgraph`,
+  `aosp_rpi5_car_lgraph_kokoro`; `aosp_rpi5_car_16gb` now uses
+  `zipformer-int8-highmem` instead. Compact and Zipformer products do not copy
+  this archive into their images.
 
 ## JNA runtime
 
