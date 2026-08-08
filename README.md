@@ -236,7 +236,9 @@ Kokoro is the natural-speech option for the 4 GB Pi. It uses substantially
 more resident memory than eSpeak, so eSpeak remains installed as a fallback.
 The model and sherpa engine provenance, including the embedded GPL eSpeak
 pronunciation data and MIT ONNX Runtime notice, are recorded in
-provenance/SOURCES.lock.
+provenance/SOURCES.lock. The reproducible AVD memory and synthesis result is
+recorded in `provenance/benchmarks/offline-tts-2026-08-08.md`; it is not a
+substitute for the pending physical 4 GB Pi measurement.
 
 ## AOSP integration
 
