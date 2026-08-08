@@ -18,6 +18,7 @@ apksigner=${APKSIGNER:-$sdk_root/build-tools/36.0.0/apksigner}
 avd_name=${CARAMEL_AVD_NAME:-caramel_api36}
 avd_port=${CARAMEL_AVD_PORT:-5554}
 serial=${CARAMEL_AVD_SERIAL:-emulator-$avd_port}
+user_id=${CARAMEL_AVD_USER:-0}
 skip_zipformer=${CARAMEL_AVD_SKIP_ZIPFORMER:-0}
 tmp_dir=$(mktemp -d "${TMPDIR:-/tmp}/caramel-voice-avd.XXXXXX")
 
@@ -88,17 +89,17 @@ if ! "$adb" -s "$serial" install -r "$voice_apk" >/dev/null; then
 fi
 "$adb" -s "$serial" install -r "$signed_tts" >/dev/null
 
-"$adb" -s "$serial" shell pm grant com.radiosound.caramelvoice \
+"$adb" -s "$serial" shell pm grant --user "$user_id" com.radiosound.caramelvoice \
     android.permission.RECORD_AUDIO
-"$adb" -s "$serial" shell pm grant com.radiosound.caramelvoice \
+"$adb" -s "$serial" shell pm grant --user "$user_id" com.radiosound.caramelvoice \
     android.permission.READ_MEDIA_AUDIO
-"$adb" -s "$serial" shell settings --user 0 put secure \
+"$adb" -s "$serial" shell settings --user "$user_id" put secure \
     tts_default_synth com.reecedunn.espeak
-"$adb" -s "$serial" shell settings --user 0 put secure \
+"$adb" -s "$serial" shell settings --user "$user_id" put secure \
     voice_interaction_service com.radiosound.caramelvoice/.CaramelVoiceInteractionService
-"$adb" -s "$serial" shell settings --user 0 put secure \
+"$adb" -s "$serial" shell settings --user "$user_id" put secure \
     assistant com.radiosound.caramelvoice/.CaramelVoiceInteractionService
-"$adb" -s "$serial" shell cmd role add-role-holder --user 0 \
+"$adb" -s "$serial" shell cmd role add-role-holder --user "$user_id" \
     android.app.role.ASSISTANT com.radiosound.caramelvoice >/dev/null
 
 wait_for_log() {
@@ -122,7 +123,7 @@ remote_root=/sdcard/Android/data/com.radiosound.caramelvoice/files
 "$adb" -s "$serial" shell rm -f "$remote_root/recognition.properties"
 "$adb" -s "$serial" logcat -c
 "$adb" -s "$serial" shell am force-stop com.radiosound.caramelvoice
-"$adb" -s "$serial" shell cmd role add-role-holder --user 0 \
+"$adb" -s "$serial" shell cmd role add-role-holder --user "$user_id" \
     android.app.role.ASSISTANT com.radiosound.caramelvoice >/dev/null
 wait_for_log 'Vosk model ready and prewarmed'
 
@@ -165,12 +166,12 @@ fi
 
 echo "PASS: API 36 assistant AVD smoke test"
 echo "assistant role:"
-"$adb" -s "$serial" shell cmd role get-role-holders --user 0 \
+"$adb" -s "$serial" shell cmd role get-role-holders --user "$user_id" \
     android.app.role.ASSISTANT
 echo "recognition services:"
 "$adb" -s "$serial" shell cmd package query-services --brief -a \
     android.speech.RecognitionService
 echo "selected TTS engine:"
-"$adb" -s "$serial" shell settings --user 0 get secure tts_default_synth
+"$adb" -s "$serial" shell settings --user "$user_id" get secure tts_default_synth
 echo "CaramelVoice log:"
 "$adb" -s "$serial" logcat -d -s 'CaramelVoice:D' '*:S' | tail -80

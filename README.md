@@ -60,7 +60,8 @@ assistant role, verifies Vosk prewarming, copies the checked-in INT8 Zipformer
 files, reboots, and verifies Zipformer's model startup. It does not claim
 microphone or CarInputService validation; those require an Android 16 Caramel
 product AVD or the physical Pi. Set `CARAMEL_AVD_SKIP_ZIPFORMER=1` to run only
-the compact profile check.
+the compact profile check. Set `CARAMEL_AVD_USER=10` when testing an AAOS
+image whose active driver user is 10 instead of the generic AVD's user 0.
 
 ### Recognition model profiles
 
