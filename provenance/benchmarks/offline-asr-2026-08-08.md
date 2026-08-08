@@ -14,6 +14,7 @@ Prydz Opus`, and the recorded coordinate command.
 | Zipformer INT8 high-memory beam (`threads=6`, `max_active_paths=8`) | 5 | 93 | 5.4% | No corpus accuracy gain; warm replay was about 0.15–0.21× real time on the same AVD. |
 | Vosk `vosk-model-small-en-us-0.15` | 11 | 93 | 11.8% | Compact fallback. |
 | Vosk `vosk-model-en-us-0.22-lgraph` | 7 | 93 | 7.5% | Better raw artist spelling than Zipformer on this corpus; retained as the robustness-oriented alternative. |
+| Whisper `base.en-q5_1` | — | — | — | About 0.21× real time on the Mac CPU, but misrecognized all three artist samples and corrupted one coordinate; rejected as a 4 GB fallback. |
 | Whisper `small.en-q5_1` | — | — | — | Semantically correct intent on all twelve files; rendered `Prydz` as `Prid's` and emitted numeric coordinates. Raw word WER is not comparable without a number normalization policy. |
 
 Zipformer produced exact text for all `what time is it` and `take me home`
@@ -50,6 +51,11 @@ The Whisper model was downloaded temporarily from:
   `https://github.com/openai/whisper/blob/main/LICENSE`
 * Host `whisper.cpp` license: MIT —
   `https://github.com/ggml-org/whisper.cpp/blob/master/LICENSE`
+
+The rejected `base.en-q5_1` comparison used the same upstream location with:
+
+* SHA-256: `4baf70dd0d7c4247ba2b81fafd9c01005ac77c2f9ef064e00dcf195d0e2fdd2f`
+* Size: 59,654,449 bytes
 
 The model is not copied into the APK, AOSP product, or this repository. The
 shipped Zipformer and Vosk sources, archives, patches, hashes, and licenses
