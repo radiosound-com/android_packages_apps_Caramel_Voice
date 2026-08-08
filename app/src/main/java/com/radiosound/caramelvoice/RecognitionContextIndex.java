@@ -124,7 +124,7 @@ final class RecognitionContextIndex {
                 for (String phrase : entity.phrases) {
                     String normalizedPhrase = normalize(phrase);
                     if (normalizedPhrase.isEmpty()) continue;
-                    double distance = normalizedDistance(normalizedHypothesis, normalizedPhrase);
+                    double distance = candidateDistance(normalizedHypothesis, normalizedPhrase);
                     Match candidate = new Match(entity, distance);
                     if (best == null || candidate.compareTo(best) < 0) {
                         second = best;
@@ -137,7 +137,7 @@ final class RecognitionContextIndex {
 
             if (best == null) return cleanedHypothesis;
             if (best.distance == 0.0) return best.entity.displayText;
-            if (best.distance > 0.24) return cleanedHypothesis;
+            if (best.distance > 0.42) return cleanedHypothesis;
             if (second != null
                     && second.entity != best.entity
                     && !normalize(second.entity.displayText)
@@ -174,6 +174,82 @@ final class RecognitionContextIndex {
         int denominator = Math.max(compactLeft.length(), compactRight.length());
         if (denominator == 0) return 0.0;
         return levenshtein(compactLeft, compactRight) / (double) denominator;
+    }
+
+    /**
+     * Uses whole-string edit distance first, then a conservative token fallback for streaming
+     * ASR's common per-word substitutions. The fallback only applies when two or more tokens
+     * independently match (exactly or phonetically), so a shared generic word cannot resolve an
+     * unrelated catalog entry by itself.
+     */
+    private static double candidateDistance(String left, String right) {
+        double characterDistance = normalizedDistance(left, right);
+        String[] leftTokens = left.split(" ");
+        String[] rightTokens = right.split(" ");
+        if (leftTokens.length < 2 || rightTokens.length < 2) return characterDistance;
+
+        boolean[] used = new boolean[rightTokens.length];
+        double score = 0.0;
+        int matchedTokens = 0;
+        for (String leftToken : leftTokens) {
+            double bestScore = 0.0;
+            int bestIndex = -1;
+            for (int index = 0; index < rightTokens.length; index++) {
+                if (used[index]) continue;
+                double tokenScore = tokenSimilarity(leftToken, rightTokens[index]);
+                if (tokenScore > bestScore) {
+                    bestScore = tokenScore;
+                    bestIndex = index;
+                }
+            }
+            if (bestIndex >= 0 && bestScore >= 0.75) {
+                used[bestIndex] = true;
+                score += bestScore;
+                matchedTokens++;
+            }
+        }
+        if (matchedTokens < 2) return characterDistance;
+        double tokenDistance = 1.0 - score / Math.max(leftTokens.length, rightTokens.length);
+        return Math.min(characterDistance, tokenDistance);
+    }
+
+    private static double tokenSimilarity(String left, String right) {
+        if (left.equals(right)) return 1.0;
+        String leftSoundex = soundex(left);
+        String rightSoundex = soundex(right);
+        if (left.length() >= 3 && right.length() >= 3
+                && !leftSoundex.isEmpty() && leftSoundex.equals(rightSoundex)) {
+            return 0.90;
+        }
+        double distance = normalizedDistance(left, right);
+        return distance <= 0.25 ? 1.0 - distance : 0.0;
+    }
+
+    /** Small English-oriented phonetic key used only as a resolver fallback. */
+    private static String soundex(String value) {
+        if (value == null || value.isEmpty()) return "";
+        String upper = value.toUpperCase(Locale.US);
+        char first = upper.charAt(0);
+        if (first < 'A' || first > 'Z') return "";
+        StringBuilder output = new StringBuilder(4).append(first);
+        char previousCode = soundexCode(first);
+        for (int index = 1; index < upper.length() && output.length() < 4; index++) {
+            char code = soundexCode(upper.charAt(index));
+            if (code != '0' && code != previousCode) output.append(code);
+            previousCode = code;
+        }
+        while (output.length() < 4) output.append('0');
+        return output.toString();
+    }
+
+    private static char soundexCode(char value) {
+        if ("BFPV".indexOf(value) >= 0) return '1';
+        if ("CGJKQSXZ".indexOf(value) >= 0) return '2';
+        if ("DT".indexOf(value) >= 0) return '3';
+        if (value == 'L') return '4';
+        if ("MN".indexOf(value) >= 0) return '5';
+        if (value == 'R') return '6';
+        return '0';
     }
 
     private static int levenshtein(String left, String right) {

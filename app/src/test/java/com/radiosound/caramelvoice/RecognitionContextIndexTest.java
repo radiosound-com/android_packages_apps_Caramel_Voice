@@ -85,6 +85,23 @@ public final class RecognitionContextIndexTest {
     }
 
     @Test
+    public void resolvesMultipleNoisyTokensWithoutCatalogSpecificKnowledge() {
+        RecognitionContextIndex index = new RecognitionContextIndex();
+        index.replaceSource("media-store", Collections.singletonList(new RecognitionEntity(
+                "catalog:43",
+                "media-store",
+                RecognitionEntity.Domain.MEDIA,
+                "Eric Prydz Opus",
+                Collections.emptyList(),
+                100)));
+
+        assertEquals(
+                "Eric Prydz Opus",
+                index.snapshot().resolve(
+                        RecognitionEntity.Domain.MEDIA, "arid prides opus"));
+    }
+
+    @Test
     public void duplicateSourcesReinforceTheSameResolvedEntity() {
         RecognitionContextIndex index = new RecognitionContextIndex();
         index.replaceSource("active-session", Collections.singletonList(new RecognitionEntity(

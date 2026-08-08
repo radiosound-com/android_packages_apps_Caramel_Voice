@@ -167,6 +167,18 @@ compete with recognition or TTS. On a cold process start the session shows
 **Preparing microphone…** until the selected model is ready, preventing the
 first spoken words from being lost while native assets load.
 
+The assistant registers a debounced observer for standard MediaStore audio and
+playlist changes, and performs a throttled full context refresh on foreground
+use for sources that do not expose an observer. This keeps newly indexed local
+music, playlists, and assistant-visible app/navigation documents available
+without scraping private databases. Post-ASR resolution also compares multiple
+matching tokens with a small phonetic fallback, while retaining distance and
+ambiguity guards; the catalog supplies the authoritative spelling rather than
+any hard-coded artist, title, or destination.
+
+The observer and noisy-catalog end-to-end check is recorded in
+`provenance/benchmarks/context-refresh-2026-08-08.md`.
+
 The index feeds up to 1,024 normalized phrases to Zipformer's modified-beam
 hotword graph and also performs conservative post-ASR resolution. For example,
 the live Pi corrected `PLAY ERIC PRIDES OPUS` to the authoritative catalog

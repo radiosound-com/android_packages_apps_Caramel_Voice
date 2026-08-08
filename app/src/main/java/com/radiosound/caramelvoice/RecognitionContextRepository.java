@@ -10,10 +10,14 @@ import android.content.ContentResolver;
 import android.content.Context;
 import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
+import android.database.ContentObserver;
 import android.database.Cursor;
 import android.media.MediaMetadata;
 import android.media.session.MediaController;
 import android.media.session.MediaSessionManager;
+import android.net.Uri;
+import android.os.Handler;
+import android.os.Looper;
 import android.os.SystemClock;
 import android.provider.MediaStore;
 import android.util.Log;
@@ -39,6 +43,7 @@ final class RecognitionContextRepository {
     private static final int MAX_PLAYLIST_ENTITIES = 120;
     private static final int MAX_LEARNED_ENTITIES_PER_DOMAIN = 64;
     private static final long MIN_REFRESH_INTERVAL_MS = 60_000;
+    private static final long MEDIA_STORE_REFRESH_DEBOUNCE_MS = 1_500;
 
     private static final RecognitionContextIndex INDEX = new RecognitionContextIndex();
     private static final ExecutorService REFRESHER = Executors.newSingleThreadExecutor();
@@ -46,23 +51,37 @@ final class RecognitionContextRepository {
             new CopyOnWriteArrayList<>();
     private static final AtomicBoolean STARTED = new AtomicBoolean();
     private static final AtomicLong LAST_REFRESH_ELAPSED_MS = new AtomicLong();
+    private static volatile Context APPLICATION_CONTEXT;
+    private static final Object MEDIA_OBSERVER_LOCK = new Object();
+    private static final Runnable MEDIA_STORE_REFRESH = () -> {
+        Context applicationContext = APPLICATION_CONTEXT;
+        if (applicationContext != null) refresh(applicationContext, true);
+    };
+    private static Handler mediaObserverHandler;
+    private static ContentObserver mediaStoreObserver;
 
     private RecognitionContextRepository() {}
 
     static void preload(Context context) {
         Context applicationContext = context.getApplicationContext();
         if (STARTED.compareAndSet(false, true)) {
+            APPLICATION_CONTEXT = applicationContext;
             seedBuiltInVocabulary();
+            registerMediaStoreObserver(applicationContext);
             refresh(applicationContext);
         }
     }
 
     static void refresh(Context context) {
+        refresh(context, false);
+    }
+
+    private static void refresh(Context context, boolean force) {
         Context applicationContext = context.getApplicationContext();
         long now = SystemClock.elapsedRealtime();
         while (true) {
             long previous = LAST_REFRESH_ELAPSED_MS.get();
-            if (previous != 0 && now - previous < MIN_REFRESH_INTERVAL_MS) return;
+            if (!force && previous != 0 && now - previous < MIN_REFRESH_INTERVAL_MS) return;
             if (LAST_REFRESH_ELAPSED_MS.compareAndSet(previous, now)) break;
         }
         REFRESHER.execute(() -> {
@@ -81,6 +100,7 @@ final class RecognitionContextRepository {
     /** Refreshes cheap resolver context and asks the backend to rebuild when it is safe. */
     static void refreshForeground(Context context) {
         Context applicationContext = context.getApplicationContext();
+        registerMediaStoreObserver(applicationContext);
         REFRESHER.execute(() -> {
             refreshLearned(applicationContext, false);
             refreshActiveMedia(applicationContext, false);
@@ -90,6 +110,52 @@ final class RecognitionContextRepository {
             // never improve the next decoder session.
             notifyChanged();
         });
+        // MediaStore/AppSearch/catalog context is intentionally throttled. This catches changes
+        // from sources that do not expose a persistent observer, while the MediaStore observer
+        // below handles ordinary library and playlist edits immediately after debounce.
+        refreshIfStale(applicationContext);
+    }
+
+    private static void refreshIfStale(Context context) {
+        long lastRefresh = LAST_REFRESH_ELAPSED_MS.get();
+        if (lastRefresh == 0
+                || SystemClock.elapsedRealtime() - lastRefresh >= MIN_REFRESH_INTERVAL_MS) {
+            refresh(context);
+        }
+    }
+
+    private static void registerMediaStoreObserver(Context context) {
+        synchronized (MEDIA_OBSERVER_LOCK) {
+            if (mediaStoreObserver != null) return;
+            try {
+                mediaObserverHandler = new Handler(Looper.getMainLooper());
+                ContentObserver observer = new ContentObserver(mediaObserverHandler) {
+                    @Override
+                    public void onChange(boolean selfChange, Uri uri) {
+                        scheduleMediaStoreRefresh();
+                    }
+                };
+                ContentResolver resolver = context.getContentResolver();
+                resolver.registerContentObserver(
+                        MediaStore.Audio.Media.EXTERNAL_CONTENT_URI, true, observer);
+                resolver.registerContentObserver(
+                        MediaStore.Audio.Playlists.EXTERNAL_CONTENT_URI, true, observer);
+                mediaStoreObserver = observer;
+                Log.i(TAG, "Registered MediaStore audio and playlist context observer");
+            } catch (RuntimeException exception) {
+                mediaObserverHandler = null;
+                Log.w(TAG, "Unable to register MediaStore context observer", exception);
+            }
+        }
+    }
+
+    private static void scheduleMediaStoreRefresh() {
+        synchronized (MEDIA_OBSERVER_LOCK) {
+            if (mediaObserverHandler == null) return;
+            mediaObserverHandler.removeCallbacks(MEDIA_STORE_REFRESH);
+            mediaObserverHandler.postDelayed(
+                    MEDIA_STORE_REFRESH, MEDIA_STORE_REFRESH_DEBOUNCE_MS);
+        }
     }
 
     static RecognitionContextIndex.Snapshot snapshot(Context context) {
@@ -315,7 +381,10 @@ final class RecognitionContextRepository {
         String album = text(albumValue);
         if (title.isEmpty() && artist.isEmpty()) return;
 
-        String displayText = artist.isEmpty() ? title
+        boolean titleAlreadyNamesArtist = !title.isEmpty() && !artist.isEmpty()
+                && RecognitionContextIndex.normalize(title)
+                        .contains(RecognitionContextIndex.normalize(artist));
+        String displayText = artist.isEmpty() || titleAlreadyNamesArtist ? title
                 : title.isEmpty() ? artist
                 : artist + " " + title;
         ArrayList<String> aliases = new ArrayList<>();
