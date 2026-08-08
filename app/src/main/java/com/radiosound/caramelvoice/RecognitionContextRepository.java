@@ -78,12 +78,17 @@ final class RecognitionContextRepository {
         });
     }
 
-    /** Refreshes cheap resolver context without rebuilding the native recognizer mid-command. */
+    /** Refreshes cheap resolver context and asks the backend to rebuild when it is safe. */
     static void refreshForeground(Context context) {
         Context applicationContext = context.getApplicationContext();
         REFRESHER.execute(() -> {
             refreshLearned(applicationContext, false);
             refreshActiveMedia(applicationContext, false);
+            // SherpaModelRepository defers this notification while a stream lease is active,
+            // then reloads the hotword graph as soon as the command is complete. Without the
+            // notification, newly active titles are only available to post-ASR resolution and
+            // never improve the next decoder session.
+            notifyChanged();
         });
     }
 
