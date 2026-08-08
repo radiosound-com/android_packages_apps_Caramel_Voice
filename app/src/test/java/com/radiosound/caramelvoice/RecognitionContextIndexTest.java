@@ -74,6 +74,10 @@ public final class RecognitionContextIndexTest {
                 "Eric Prydz Opus",
                 index.snapshot().resolve(
                         RecognitionEntity.Domain.MEDIA, "eric pride's opus"));
+        assertEquals(
+                "Eric Prydz Opus",
+                index.snapshot().resolve(
+                        RecognitionEntity.Domain.MEDIA, "eric prade's opus"));
     }
 
     @Test
