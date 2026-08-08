@@ -136,7 +136,11 @@ that trailing silence to Vosk. This avoids spending twice-real-time decoder
 work on idle room audio while retaining short pauses inside a command. The
 selected model is loaded and prewarmed
 when the voice interaction service becomes ready, then retained for the app
-process instead of being reloaded for every push-to-talk session.
+process instead of being reloaded for every push-to-talk session. Zipformer
+starts its initial built-in graph after a 250 ms bootstrap delay; context
+collector notifications cannot cancel that first load and instead schedule the
+full hotword graph after the 2.5-second debounce. This keeps cold PTT startup
+responsive while preserving the later personalized catalog update.
 
 ### Generic recognition context
 
