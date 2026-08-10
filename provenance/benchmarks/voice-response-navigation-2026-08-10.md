@@ -25,10 +25,9 @@ at `11:05:17.068`, followed by the OsmAnd activity start at `11:05:17.072`.
 The first physical replay then exposed a separate fallback edge case: Kokoro
 needed about 6.4 seconds to synthesize this sentence and another 1.9 seconds
 to drain it, so the old 8-second missing-callback fallback could still launch
-OsmAnd just before the audio track stopped. The coordinator now gives
-responses with an external action a 20-second fallback window; ordinary
-responses retain the 8-second timeout. Normal TTS completion remains the fast
-path.
+OsmAnd just before the audio track stopped. The coordinator now gives both
+external-action and ordinary responses a 20-second fallback window. Normal
+TTS completion remains the fast path.
 
 The prebuilt is unsigned; the Caramel product build signs it with the platform
 key when installing it under `/product/priv-app`. A clean AOSP image and a
@@ -56,3 +55,37 @@ bytes and its userdata partition is 229.4 GiB. The image was transferred as
 This timing test used a post-reboot system-APK deployment rather than a fresh
 userdata flash, so clean-userdata validation of the complete image remains a
 separate release-install check.
+
+The follow-up media-recovery build is commit `aa9a79d` (the preceding
+contextual-media implementation is `f981dac`). It adds generic recovery for
+ASR output whose play prefix or surrounding words are corrupted while a
+distinctive catalog token survives, and raises the ordinary Kokoro completion
+fallback to 20 seconds. Unit tests, lint, and the release build passed. The
+new platform-signed APK has SHA-256
+`dbf941fa65e0be9c9663f1fec93618f606289d5b906a8c097b7a2456c1c242f8`.
+
+After rebooting the Pi with that APK, a controlled Daniel replay produced:
+
+* `15:49:11.830` — Zipformer final result: `TAKE ME HOME`
+* `15:49:11.877` — Kokoro TTS started
+* `15:49:17.796` — Android TTS completion callback
+* `15:49:17.816` — OsmAnd `CarAppActivity` launch
+
+The synthetic replay temporarily selected the line-in card to validate the
+Mac-to-Pi signal path. It was reset afterward to automatic routing
+(`persist.vendor.audio.pcm.card=-1`); the normal policy selects the standalone
+`AK5370` USB microphone as capture card 0. No fatal exception, assistant crash,
+or TTS completion timeout occurred in this replay.
+
+The final `aa9a79d` Pi image was packaged with `RPI5_AUDIO=usb` and
+`RPI5_IMAGE_SIZE_BYTES=250059350016`:
+
+* Image: `RaspberryVanillaAOSP16-20260810-rpi5_car_zipformer_kokoro-aa9a79d.img.gz`
+* Compressed size: 2,839,665,974 bytes
+* Compressed SHA-256:
+  `1ac4680db8aac6e62d98142e4b8bf83f96e4acd845b6dd27561ff910b8e51768`
+* `gzip -t` passed locally; the local and build-host SHA-256 values match.
+* Raw image logical size: 250,059,350,016 bytes; userdata is 229.4 GiB.
+* The final product `system.img` SHA-256 is
+  `9814348b5d307e37ce5490cf0bcc5bf3c6df88af8099bc5f423dcf3c7ba3ec0e`.
+  Its platform-signed assistant APK matches the device-tested SHA above.
