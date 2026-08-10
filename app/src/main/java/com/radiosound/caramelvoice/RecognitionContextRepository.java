@@ -22,11 +22,21 @@ import android.os.SystemClock;
 import android.provider.MediaStore;
 import android.util.Log;
 
+import java.io.BufferedReader;
+import java.io.BufferedWriter;
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.FileOutputStream;
+import java.io.IOException;
+import java.io.InputStreamReader;
+import java.io.OutputStreamWriter;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -39,6 +49,7 @@ import java.util.concurrent.atomic.AtomicLong;
 final class RecognitionContextRepository {
     private static final String TAG = "CaramelVoice";
     private static final String LEARNED_PREFERENCES = "recognition_context";
+    private static final String CONTEXT_CACHE_FILE = "recognition-context.cache";
     private static final int MAX_MEDIA_STORE_ENTITIES = 500;
     private static final int MAX_PLAYLIST_ENTITIES = 120;
     private static final int MAX_LEARNED_ENTITIES_PER_DOMAIN = 64;
@@ -67,6 +78,7 @@ final class RecognitionContextRepository {
         if (STARTED.compareAndSet(false, true)) {
             APPLICATION_CONTEXT = applicationContext;
             seedBuiltInVocabulary();
+            loadCachedContext(applicationContext);
             registerMediaStoreObserver(applicationContext);
             refresh(applicationContext);
         }
@@ -90,7 +102,10 @@ final class RecognitionContextRepository {
             refreshMediaStore(applicationContext, true);
             AtomicInteger pendingCollectors = new AtomicInteger(2);
             Runnable collectorFinished = () -> {
-                if (pendingCollectors.decrementAndGet() == 0) notifyChanged();
+                if (pendingCollectors.decrementAndGet() == 0) {
+                    persistCachedContext(applicationContext);
+                    notifyChanged();
+                }
             };
             AppSearchContextCollector.refresh(applicationContext, INDEX, collectorFinished);
             MediaBrowserContextCollector.refresh(applicationContext, INDEX, collectorFinished);
@@ -413,5 +428,60 @@ final class RecognitionContextRepository {
             String sourceId, List<RecognitionEntity> entities, boolean notifyModel) {
         INDEX.replaceSource(sourceId, entities);
         if (notifyModel) notifyChanged();
+    }
+
+    private static void loadCachedContext(Context context) {
+        File cache = new File(context.getNoBackupFilesDir(), CONTEXT_CACHE_FILE);
+        if (!cache.isFile() || cache.length() == 0) return;
+
+        ArrayList<RecognitionEntity> entities = new ArrayList<>();
+        try (BufferedReader input = new BufferedReader(new InputStreamReader(
+                new FileInputStream(cache), java.nio.charset.StandardCharsets.UTF_8))) {
+            for (RecognitionEntity entity : RecognitionContextCache.read(
+                    input, System.currentTimeMillis())) {
+                if (isCacheSource(entity.sourceId)) entities.add(entity);
+            }
+        } catch (IOException | RuntimeException exception) {
+            Log.w(TAG, "Unable to read recognition context cache", exception);
+            return;
+        }
+
+        HashMap<String, ArrayList<RecognitionEntity>> bySource = new HashMap<>();
+        for (RecognitionEntity entity : entities) {
+            bySource.computeIfAbsent(entity.sourceId, ignored -> new ArrayList<>()).add(entity);
+        }
+        int loaded = 0;
+        for (Map.Entry<String, ArrayList<RecognitionEntity>> entry : bySource.entrySet()) {
+            INDEX.replaceSource(entry.getKey(), entry.getValue());
+            loaded += entry.getValue().size();
+        }
+        if (loaded > 0) Log.i(TAG, "Loaded " + loaded + " cached recognition context entities");
+    }
+
+    private static void persistCachedContext(Context context) {
+        ArrayList<RecognitionEntity> entities = new ArrayList<>();
+        for (RecognitionEntity entity : INDEX.snapshot(0).entities()) {
+            if (isCacheSource(entity.sourceId)) entities.add(entity);
+        }
+        File cache = new File(context.getNoBackupFilesDir(), CONTEXT_CACHE_FILE);
+        File temporary = new File(cache.getPath() + ".tmp");
+        try (BufferedWriter output = new BufferedWriter(new OutputStreamWriter(
+                new FileOutputStream(temporary, false), java.nio.charset.StandardCharsets.UTF_8))) {
+            RecognitionContextCache.write(output, entities, System.currentTimeMillis());
+        } catch (IOException | RuntimeException exception) {
+            Log.w(TAG, "Unable to write recognition context cache", exception);
+            return;
+        }
+        if (!temporary.renameTo(cache)) {
+            Log.w(TAG, "Unable to install recognition context cache");
+            temporary.delete();
+        }
+    }
+
+    private static boolean isCacheSource(String sourceId) {
+        return "active-media".equals(sourceId)
+                || "media-store".equals(sourceId)
+                || "media-browser".equals(sourceId)
+                || "appsearch".equals(sourceId);
     }
 }

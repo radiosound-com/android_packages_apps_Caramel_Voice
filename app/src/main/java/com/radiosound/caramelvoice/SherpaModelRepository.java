@@ -57,12 +57,15 @@ final class SherpaModelRepository {
             applicationContext = app;
         }
 
-        // Make a usable built-in model available quickly. Context collectors continue in the
-        // background and coalesce into the debounced full hotword graph afterward.
-        scheduleInitialReload(INITIAL_LOAD_DELAY_MS);
-        // Register the collectors only after the bootstrap timer exists. A very fast collector
-        // must mark a deferred reload, not replace the initial timer with the long debounce.
+        // Restore the last bounded catalog snapshot before the first model load. This keeps the
+        // first post-boot utterance context-biased without making cold startup wait for media
+        // providers that may take several seconds to answer.
         RecognitionContextRepository.preload(app);
+        // Make a usable model available quickly. Context collectors continue in the background
+        // and coalesce into the debounced full hotword graph afterward.
+        scheduleInitialReload(INITIAL_LOAD_DELAY_MS);
+        // Register the listener only after the bootstrap timer exists. A very fast collector
+        // must mark a deferred reload, not replace the initial timer with the long debounce.
         RecognitionContextRepository.addChangeListener(SherpaModelRepository::contextChanged);
     }
 

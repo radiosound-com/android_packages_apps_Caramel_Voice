@@ -95,6 +95,10 @@ final class RecognitionContextIndex {
             return hotwordPhrases;
         }
 
+        List<RecognitionEntity> entities() {
+            return entities;
+        }
+
         String asZipformerHotwords() {
             StringBuilder output = new StringBuilder();
             for (String phrase : hotwordPhrases) {
