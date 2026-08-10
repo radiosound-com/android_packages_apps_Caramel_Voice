@@ -140,7 +140,12 @@ process instead of being reloaded for every push-to-talk session. Zipformer
 starts its initial built-in graph after a 250 ms bootstrap delay; context
 collector notifications cannot cancel that first load and instead schedule the
 full hotword graph after the 2.5-second debounce. This keeps cold PTT startup
-responsive while preserving the later personalized catalog update.
+responsive while preserving the later personalized catalog update. Once a
+catalog scan completes, the bounded context snapshot is atomically cached in
+the app's no-backup directory for up to seven days. A later boot restores that
+snapshot before the 250 ms load, so the first utterance can use the previous
+media and destination vocabulary while live providers refresh in the
+background and replace stale entries.
 
 ### Generic recognition context
 
@@ -183,7 +188,9 @@ The index feeds up to 1,024 normalized phrases to Zipformer's modified-beam
 hotword graph and also performs conservative post-ASR resolution. For example,
 the live Pi corrected `PLAY ERIC PRIDES OPUS` to the authoritative catalog
 value `Eric Prydz Opus`. There are no hard-coded artist, playlist, destination,
-or player names.
+or player names. The cache is private to the active Android user and is not
+included in backups; it contains only bounded metadata collected from the
+standard surfaces above, not audio or another app's private database.
 
 ### Generic media search
 

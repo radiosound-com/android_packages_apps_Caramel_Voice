@@ -18,7 +18,7 @@ source revision and is recorded in `SOURCES.lock`:
 
 * `app/prebuilts/CaramelVoiceAssistant-0.3.0.apk`
 * SHA-256:
-  `8ddbbbd0f973c1fab7cfba413eec985bc049a378cd14f90cab921893a572db92`
+  `c87853ef9cf4f4a3bcccd25ed298fa9d3a56d0be9555772a43c932baffc933e9`
 
 The first product-signed AVD replay confirmed the ordering fix: TTS completed
 at `11:05:17.068`, followed by the OsmAnd activity start at `11:05:17.072`.
@@ -89,3 +89,20 @@ The final `aa9a79d` Pi image was packaged with `RPI5_AUDIO=usb` and
 * The final product `system.img` SHA-256 is
   `9814348b5d307e37ce5490cf0bcc5bf3c6df88af8099bc5f423dcf3c7ba3ec0e`.
   Its platform-signed assistant APK matches the device-tested SHA above.
+
+The context-cache follow-up is commit `0fc7ed6`. On the physical Pi, the
+first boot after installing that APK completed the live catalog scan and
+wrote a 54.6 KiB private cache containing 354 entities. After reboot, before
+the first PTT request, the log reported:
+
+* `16:06:24.687` — `Loaded 354 cached recognition context entities`
+* `16:06:29.660` — first Zipformer graph ready with 445 context phrases
+
+The subsequent live scan replaced the cache-backed snapshot and rebuilt the
+graph to 1,024 phrases. A controlled line-in replay then opened the voice
+session, selected the dynamic USB capture route, started Spotify from the
+recognized `PLAY ERIC PRY` request, and completed Kokoro TTS without a crash,
+timeout, or reboot. This replay used reused userdata; `READ_MEDIA_AUDIO` had
+to be granted manually because default-permission exceptions are applied at
+user creation. The product image continues to carry the default-permissions
+entry for clean-userdata flashes.
