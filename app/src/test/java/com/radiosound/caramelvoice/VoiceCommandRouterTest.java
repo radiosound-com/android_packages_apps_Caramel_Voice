@@ -63,6 +63,14 @@ public final class VoiceCommandRouterTest {
     }
 
     @Test
+    public void recoversNoisyPlayPrefix() {
+        VoiceCommandRouter.Command command = VoiceCommandRouter.route("player at quiz opus");
+
+        assertEquals(VoiceCommandRouter.Type.PLAY, command.type);
+        assertEquals("quiz opus", command.argument);
+    }
+
+    @Test
     public void extractsMediaSearchWhilePreservingProperNames() {
         VoiceCommandRouter.Command command = VoiceCommandRouter.route(
                 "  PLAY   Eric Prydz Opus  ");

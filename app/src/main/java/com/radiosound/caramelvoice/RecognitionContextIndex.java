@@ -186,6 +186,8 @@ final class RecognitionContextIndex {
         double characterDistance = normalizedDistance(left, right);
         String[] leftTokens = left.split(" ");
         String[] rightTokens = right.split(" ");
+        double containedDistance = containedTokenDistance(leftTokens, rightTokens);
+        if (containedDistance < characterDistance) return containedDistance;
         if (leftTokens.length < 2 || rightTokens.length < 2) return characterDistance;
 
         boolean[] used = new boolean[rightTokens.length];
@@ -211,6 +213,33 @@ final class RecognitionContextIndex {
         if (matchedTokens < 2) return characterDistance;
         double tokenDistance = 1.0 - score / Math.max(leftTokens.length, rightTokens.length);
         return Math.min(characterDistance, tokenDistance);
+    }
+
+    /**
+     * Recognizes a catalog alias that survived ASR inside otherwise corrupted command text.
+     * A distinctive token is enough for a one-token alias such as a track title, but short
+     * function words are deliberately ignored so "the" or "and" cannot select a catalog item.
+     */
+    private static double containedTokenDistance(String[] leftTokens, String[] rightTokens) {
+        if (leftTokens.length == 0 || rightTokens.length == 0
+                || leftTokens.length <= rightTokens.length) return 1.0;
+
+        boolean distinctiveTokenMatched = false;
+        for (String rightToken : rightTokens) {
+            boolean matched = false;
+            for (String leftToken : leftTokens) {
+                if (rightToken.equals(leftToken)) {
+                    matched = true;
+                    if (rightToken.length() >= 4) distinctiveTokenMatched = true;
+                    break;
+                }
+            }
+            if (!matched || rightToken.length() < 4) return 1.0;
+        }
+        if (!distinctiveTokenMatched) return 1.0;
+
+        int extraTokens = leftTokens.length - rightTokens.length;
+        return 0.12 + Math.min(extraTokens, 4) * 0.05;
     }
 
     private static double tokenSimilarity(String left, String right) {

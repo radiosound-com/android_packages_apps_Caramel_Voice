@@ -277,6 +277,21 @@ public final class CaramelVoiceSession extends VoiceInteractionSession {
             return;
         }
 
+        // Proper names can leave the ASR as an otherwise non-actionable sentence even when a
+        // distinctive catalog token survived (for example, "there's opus and"). Let the
+        // app-neutral context index recover the media entity; no provider or title is hardcoded.
+        if (command.type == VoiceCommandRouter.Type.ECHO) {
+            String contextualMedia = RecognitionContextRepository.snapshot(context).resolve(
+                    RecognitionEntity.Domain.MEDIA, phrase);
+            if (!contextualMedia.isEmpty()
+                    && !RecognitionContextIndex.normalize(contextualMedia)
+                            .equals(RecognitionContextIndex.normalize(phrase))) {
+                command = VoiceCommandRouter.playFromContext(contextualMedia, phrase);
+                Log.i(TAG, "Recovered contextual media command: " + phrase
+                        + " -> " + contextualMedia);
+            }
+        }
+
         String response;
         Runnable afterSpeech = null;
         if (command.type == VoiceCommandRouter.Type.TIME) {

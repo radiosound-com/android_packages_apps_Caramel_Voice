@@ -34,7 +34,7 @@ public final class VoiceResponseCoordinatorTest {
 
     @Test
     public void externalActionGetsGenerationGracePeriod() {
-        assertEquals(8_000L, VoiceResponseCoordinator.timeoutMs(null));
+        assertEquals(20_000L, VoiceResponseCoordinator.timeoutMs(null));
         assertEquals(20_000L, VoiceResponseCoordinator.timeoutMs(() -> {}));
     }
 

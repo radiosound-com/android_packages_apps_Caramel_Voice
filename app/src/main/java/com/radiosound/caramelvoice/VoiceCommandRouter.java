@@ -49,6 +49,10 @@ final class VoiceCommandRouter {
         return first == null ? route("") : first;
     }
 
+    static Command playFromContext(String query, String phrase) {
+        return new Command(Type.PLAY, normalizeForParse(query), phrase == null ? "" : phrase);
+    }
+
     static Command route(String phrase) {
         String original = phrase == null ? "" : phrase.trim();
         String normalized = normalize(original);
@@ -144,6 +148,18 @@ final class VoiceCommandRouter {
         }
         if (normalized.startsWith("please play ")) {
             return collapseWhitespace(normalized.substring("please play ".length()));
+        }
+        // The compact Zipformer commonly renders "play" as "player at" or
+        // "player" when a proper name follows it. Keep this recovery generic;
+        // the catalog resolver supplies the authoritative title or artist.
+        if (normalized.startsWith("player at ")) {
+            return collapseWhitespace(normalized.substring("player at ".length()));
+        }
+        if (normalized.startsWith("player ")) {
+            return collapseWhitespace(normalized.substring("player ".length()));
+        }
+        if (normalized.startsWith("plate ")) {
+            return collapseWhitespace(normalized.substring("plate ".length()));
         }
         return null;
     }

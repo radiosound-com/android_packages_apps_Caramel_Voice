@@ -102,6 +102,27 @@ public final class RecognitionContextIndexTest {
     }
 
     @Test
+    public void resolvesDistinctiveAliasInsideCorruptedCommandText() {
+        RecognitionContextIndex index = new RecognitionContextIndex();
+        index.replaceSource("media-browser", Collections.singletonList(new RecognitionEntity(
+                "catalog:44",
+                "media-browser",
+                RecognitionEntity.Domain.MEDIA,
+                "Eric Prydz Opus",
+                Collections.singletonList("Opus"),
+                100)));
+
+        assertEquals(
+                "Eric Prydz Opus",
+                index.snapshot().resolve(
+                        RecognitionEntity.Domain.MEDIA, "there s opus and"));
+        assertEquals(
+                "Eric Prydz Opus",
+                index.snapshot().resolve(
+                        RecognitionEntity.Domain.MEDIA, "quiz opus"));
+    }
+
+    @Test
     public void duplicateSourcesReinforceTheSameResolvedEntity() {
         RecognitionContextIndex index = new RecognitionContextIndex();
         index.replaceSource("active-session", Collections.singletonList(new RecognitionEntity(
