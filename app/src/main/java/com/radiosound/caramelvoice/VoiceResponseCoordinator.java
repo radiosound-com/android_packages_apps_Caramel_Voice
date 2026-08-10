@@ -7,6 +7,9 @@ package com.radiosound.caramelvoice;
 
 /** Keeps externally visible command actions behind their spoken response. */
 final class VoiceResponseCoordinator {
+    private static final long DEFAULT_TIMEOUT_MS = 8_000L;
+    private static final long ACTION_TIMEOUT_MS = 20_000L;
+
     interface Speaker {
         void speak(String text, Runnable onComplete);
     }
@@ -19,5 +22,9 @@ final class VoiceResponseCoordinator {
             return;
         }
         speaker.speak(text, afterSpeech);
+    }
+
+    static long timeoutMs(Runnable afterSpeech) {
+        return afterSpeech == null ? DEFAULT_TIMEOUT_MS : ACTION_TIMEOUT_MS;
     }
 }

@@ -18,9 +18,19 @@ source revision and is recorded in `SOURCES.lock`:
 
 * `app/prebuilts/CaramelVoiceAssistant-0.3.0.apk`
 * SHA-256:
-  `a21880c0541f77f563fd0a0fb6e9ccbaba1627f1ba31179f9509936925d7121e`
+  `3ddea13c44814c07989a2934a6830128a3c9cdc2a545907214d6fa3cce39d34f`
+
+The first product-signed AVD replay confirmed the ordering fix: TTS completed
+at `11:05:17.068`, followed by the OsmAnd activity start at `11:05:17.072`.
+The first physical replay then exposed a separate fallback edge case: Kokoro
+needed about 6.4 seconds to synthesize this sentence and another 1.9 seconds
+to drain it, so the old 8-second missing-callback fallback could still launch
+OsmAnd just before the audio track stopped. The coordinator now gives
+responses with an external action a 20-second fallback window; ordinary
+responses retain the 8-second timeout. Normal TTS completion remains the fast
+path.
 
 The prebuilt is unsigned; the Caramel product build signs it with the platform
 key when installing it under `/product/priv-app`. A clean AOSP image and a
-post-reboot physical-Pi replay are required before this fix is considered a
-release benchmark.
+post-reboot physical-Pi replay are required before the timeout adjustment is
+considered a release benchmark.

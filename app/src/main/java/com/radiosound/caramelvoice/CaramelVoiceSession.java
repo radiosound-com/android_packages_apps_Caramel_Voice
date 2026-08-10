@@ -417,9 +417,12 @@ public final class CaramelVoiceSession extends VoiceInteractionSession {
                 completeUtterance(utteranceId);
                 return;
             }
-            Runnable timeout = () -> completeUtterance(utteranceId);
+            Runnable timeout = () -> {
+                Log.w(TAG, "TTS completion timeout: " + utteranceId);
+                completeUtterance(utteranceId);
+            };
             utteranceTimeout = timeout;
-            mainHandler.postDelayed(timeout, 8000);
+            mainHandler.postDelayed(timeout, VoiceResponseCoordinator.timeoutMs(afterSpeech));
         } else {
             Log.w(TAG, "TTS unavailable: " + text);
             completeUtterance(utteranceId);

@@ -32,6 +32,12 @@ public final class VoiceResponseCoordinatorTest {
         assertEquals(List.of("speak:Opening home in OsmAnd.", "launch"), events);
     }
 
+    @Test
+    public void externalActionGetsGenerationGracePeriod() {
+        assertEquals(8_000L, VoiceResponseCoordinator.timeoutMs(null));
+        assertEquals(20_000L, VoiceResponseCoordinator.timeoutMs(() -> {}));
+    }
+
     private static final class CallbackSpeaker implements VoiceResponseCoordinator.Speaker {
         private final List<String> events;
         Runnable completion;
