@@ -48,6 +48,7 @@ public final class CaramelVoiceSession extends VoiceInteractionSession {
     private boolean ttsReady;
     private int utteranceSequence;
     private String activeUtteranceId;
+    private Runnable utteranceCompletionAction;
     private Runnable utteranceTimeout;
     private Runnable recognitionRetry;
     private Runnable modelReadyTimeout;
@@ -163,6 +164,8 @@ public final class CaramelVoiceSession extends VoiceInteractionSession {
             tts.shutdown();
             tts = null;
         }
+        activeUtteranceId = null;
+        utteranceCompletionAction = null;
         super.onDestroy();
     }
 
@@ -271,34 +274,46 @@ public final class CaramelVoiceSession extends VoiceInteractionSession {
         String phrase = command.phrase;
         if (command.type == VoiceCommandRouter.Type.EMPTY) {
             speak("I did not hear a command");
-            finish();
             return;
         }
 
         String response;
+        Runnable afterSpeech = null;
         if (command.type == VoiceCommandRouter.Type.TIME) {
             response = "It is " + DateFormat.getTimeInstance(DateFormat.SHORT).format(new Date());
         } else if (command.type == VoiceCommandRouter.Type.NAVIGATE_HOME) {
-            response = launchOsmAndSearch("home")
+            Intent launch = findOsmAndSearchIntent("home");
+            response = launch != null
                     ? "Opening home in OsmAnd."
                     : "OsmAnd is not installed.";
+            if (launch != null) {
+                afterSpeech = () -> startOsmAndActivity(launch);
+            }
             Log.i(TAG, "NAVIGATE_HOME: " + phrase);
         } else if (command.type == VoiceCommandRouter.Type.NAVIGATE_TO) {
             String destination = RecognitionContextRepository.snapshot(context).resolve(
                     RecognitionEntity.Domain.NAVIGATION, command.argument);
-            boolean launched = !destination.isEmpty() && launchOsmAndSearch(destination);
-            response = launched
+            Intent launch = destination.isEmpty() ? null : findOsmAndSearchIntent(destination);
+            response = launch != null
                     ? "Opening navigation for " + destination + "."
                     : "OsmAnd is not installed.";
             Log.i(TAG, "NAVIGATE_TO: " + destination);
-            if (launched) {
-                RecognitionContextRepository.recordSuccessful(
-                        context, RecognitionEntity.Domain.NAVIGATION, destination);
+            if (launch != null) {
+                afterSpeech = () -> {
+                    if (startOsmAndActivity(launch)) {
+                        RecognitionContextRepository.recordSuccessful(
+                                context, RecognitionEntity.Domain.NAVIGATION, destination);
+                    }
+                };
             }
         } else if (command.type == VoiceCommandRouter.Type.OPEN_MAP) {
-            response = launchOsmAnd(null)
+            Intent launch = findOsmAndIntent(null);
+            response = launch != null
                     ? "Opening the map."
                     : "OsmAnd is not installed.";
+            if (launch != null) {
+                afterSpeech = () -> startOsmAndActivity(launch);
+            }
         } else if (command.type == VoiceCommandRouter.Type.PLAY) {
             handleMediaCommand(command);
             return;
@@ -308,7 +323,7 @@ public final class CaramelVoiceSession extends VoiceInteractionSession {
 
         updateStatus(response);
         Log.i(TAG, "COMMAND: " + phrase + " -> " + response);
-        speak(response);
+        speak(response, afterSpeech);
     }
 
     private void handleMediaCommand(VoiceCommandRouter.Command command) {
@@ -354,11 +369,11 @@ public final class CaramelVoiceSession extends VoiceInteractionSession {
         }
     }
 
-    private boolean launchOsmAndSearch(String destination) {
-        return launchOsmAnd(Uri.parse("geo:0,0?q=" + Uri.encode(destination)));
+    private Intent findOsmAndSearchIntent(String destination) {
+        return findOsmAndIntent(Uri.parse("geo:0,0?q=" + Uri.encode(destination)));
     }
 
-    private boolean launchOsmAnd(Uri uri) {
+    private Intent findOsmAndIntent(Uri uri) {
         for (String packageName : OSMAND_PACKAGES) {
             try {
                 Intent launch;
@@ -372,19 +387,27 @@ public final class CaramelVoiceSession extends VoiceInteractionSession {
                             .setPackage(packageName);
                 }
                 if (launch != null) {
-                    startAssistantActivity(launch);
-                    return true;
+                    return launch;
                 }
             } catch (RuntimeException exception) {
                 Log.w(TAG, "Unable to launch OsmAnd package " + packageName, exception);
             }
         }
-        return false;
+        return null;
     }
 
     private void speak(String text) {
+        speak(text, null);
+    }
+
+    private void speak(String text, Runnable afterSpeech) {
+        VoiceResponseCoordinator.respond(text, this::speakNow, afterSpeech);
+    }
+
+    private void speakNow(String text, Runnable afterSpeech) {
         String utteranceId = "caramel-voice-" + (++utteranceSequence);
         activeUtteranceId = utteranceId;
+        utteranceCompletionAction = afterSpeech;
         if (ttsReady && tts != null) {
             Bundle params = new Bundle();
             params.putString(TextToSpeech.Engine.KEY_PARAM_UTTERANCE_ID, utteranceId);
@@ -403,6 +426,16 @@ public final class CaramelVoiceSession extends VoiceInteractionSession {
         }
     }
 
+    private boolean startOsmAndActivity(Intent launch) {
+        try {
+            startAssistantActivity(launch);
+            return true;
+        } catch (RuntimeException exception) {
+            Log.w(TAG, "Unable to start OsmAnd activity", exception);
+            return false;
+        }
+    }
+
     private void completeUtterance(String utteranceId) {
         mainHandler.post(() -> {
             if (!utteranceId.equals(activeUtteranceId)) return;
@@ -410,6 +443,15 @@ public final class CaramelVoiceSession extends VoiceInteractionSession {
             if (utteranceTimeout != null) {
                 mainHandler.removeCallbacks(utteranceTimeout);
                 utteranceTimeout = null;
+            }
+            Runnable afterSpeech = utteranceCompletionAction;
+            utteranceCompletionAction = null;
+            if (afterSpeech != null) {
+                try {
+                    afterSpeech.run();
+                } catch (RuntimeException exception) {
+                    Log.w(TAG, "Command action failed after TTS", exception);
+                }
             }
             mainHandler.postDelayed(this::finish, 200);
         });
