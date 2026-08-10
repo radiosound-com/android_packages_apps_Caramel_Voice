@@ -18,7 +18,7 @@ source revision and is recorded in `SOURCES.lock`:
 
 * `app/prebuilts/CaramelVoiceAssistant-0.3.0.apk`
 * SHA-256:
-  `412a36678dda6422683cbdc6bb6ddec9c5f43bab1e6d4953025a83b39e2f9e00`
+  `8ddbbbd0f973c1fab7cfba413eec985bc049a378cd14f90cab921893a572db92`
 
 The first product-signed AVD replay confirmed the ordering fix: TTS completed
 at `11:05:17.068`, followed by the OsmAnd activity start at `11:05:17.072`.

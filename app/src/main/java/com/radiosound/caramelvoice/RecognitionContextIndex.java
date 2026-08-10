@@ -312,4 +312,13 @@ final class RecognitionContextIndex {
                 .replaceAll("\\s+", " ")
                 .trim();
     }
+
+    static boolean hasDistinctiveToken(String value) {
+        String normalized = normalize(value);
+        if (normalized.isEmpty()) return false;
+        for (String token : normalized.split(" ")) {
+            if (token.length() >= 4) return true;
+        }
+        return false;
+    }
 }

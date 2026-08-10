@@ -283,7 +283,8 @@ public final class CaramelVoiceSession extends VoiceInteractionSession {
         if (command.type == VoiceCommandRouter.Type.ECHO) {
             String contextualMedia = RecognitionContextRepository.snapshot(context).resolve(
                     RecognitionEntity.Domain.MEDIA, phrase);
-            if (!contextualMedia.isEmpty()
+            if (RecognitionContextIndex.hasDistinctiveToken(phrase)
+                    && !contextualMedia.isEmpty()
                     && !RecognitionContextIndex.normalize(contextualMedia)
                             .equals(RecognitionContextIndex.normalize(phrase))) {
                 command = VoiceCommandRouter.playFromContext(contextualMedia, phrase);
