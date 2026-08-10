@@ -77,7 +77,7 @@ Mac-to-Pi signal path. It was reset afterward to automatic routing
 `AK5370` USB microphone as capture card 0. No fatal exception, assistant crash,
 or TTS completion timeout occurred in this replay.
 
-The final `aa9a79d` Pi image was packaged with `RPI5_AUDIO=usb` and
+The preceding `aa9a79d` Pi image was packaged with `RPI5_AUDIO=usb` and
 `RPI5_IMAGE_SIZE_BYTES=250059350016`:
 
 * Image: `RaspberryVanillaAOSP16-20260810-rpi5_car_zipformer_kokoro-aa9a79d.img.gz`
@@ -106,3 +106,17 @@ timeout, or reboot. This replay used reused userdata; `READ_MEDIA_AUDIO` had
 to be granted manually because default-permission exceptions are applied at
 user creation. The product image continues to carry the default-permissions
 entry for clean-userdata flashes.
+
+The current full-size image for code commit `0fc7ed6` was packaged with
+`RPI5_AUDIO=usb` and `RPI5_IMAGE_SIZE_BYTES=250059350016`:
+
+* Image: `RaspberryVanillaAOSP16-20260810-rpi5_car_zipformer_kokoro-0fc7ed6.img.gz`
+* Compressed size: 2,839,678,653 bytes
+* Compressed SHA-256:
+  `8b396f110f3e84c7c3f57a5295d036f7937d4bd17375368f39f54b3ae6a2c0c9`
+* `gzip -t` passed locally; the local and build-host SHA-256 values match.
+* Raw image logical size: 250,059,350,016 bytes; userdata is 229.4 GiB.
+* Final product `system.img` SHA-256:
+  `d845509ccd5604b8597e507fd106cea859476d97e2aa28fe60b21e7e6b253471`.
+* Platform-signed assistant APK SHA-256:
+  `8cba25f64b9f60901cb2e1f71829177a2eefbb162bfb0675229e9f97b5b38acb`.
