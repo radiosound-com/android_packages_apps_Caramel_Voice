@@ -10,3 +10,11 @@ aconfig_value_set {
         "com.android.server.usb.flags/Android.bp",
     ],
 }
+
+aconfig_value_set {
+    name: "aconfig_value_set-vendor_radiosound_caramel_audio",
+    srcs: [
+        "com.android.media.audio/Android.bp",
+        "android.media.audio/Android.bp",
+    ],
+}

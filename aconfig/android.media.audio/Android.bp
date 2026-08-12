@@ -1,0 +1,12 @@
+// Copyright (C) 2026 Radio Sound, Inc.
+// SPDX-License-Identifier: Apache-2.0
+
+aconfig_values {
+    name: "aconfig-values-vendor_radiosound_caramel_audio-android.media.audio-all",
+    package: "android.media.audio",
+    srcs: [
+        "foreground_audio_control_flag_values.textproto",
+        "mute_background_audio_flag_values.textproto",
+        "ro_foreground_audio_control_flag_values.textproto",
+    ],
+}

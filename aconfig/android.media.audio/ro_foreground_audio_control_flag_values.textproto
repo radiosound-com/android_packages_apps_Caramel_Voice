@@ -1,0 +1,9 @@
+# Copyright (C) 2026 Radio Sound, Inc.
+# SPDX-License-Identifier: Apache-2.0
+
+flag_value {
+    package: "android.media.audio"
+    name: "ro_foreground_audio_control"
+    state: DISABLED
+    permission: READ_ONLY
+}

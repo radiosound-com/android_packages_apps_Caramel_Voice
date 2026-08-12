@@ -1,0 +1,9 @@
+# Copyright (C) 2026 Radio Sound, Inc.
+# SPDX-License-Identifier: Apache-2.0
+
+flag_value {
+    package: "com.android.media.audio"
+    name: "hardening_partial_volume"
+    state: DISABLED
+    permission: READ_WRITE
+}
